@@ -34,7 +34,7 @@ const poblarCategorias = async () => {
         { nombre: 'Celulares' },
         { nombre: 'Cargadores' },
         { nombre: 'Audífonos' },
-        { nombre: 'Accesorios' }
+        { nombre: 'Estuches' }
       ]
     });
     console.log("--- CATEGORÍAS INICIALES CREADAS ---");

@@ -1,5 +1,9 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { 
+  obtenerCategorias, 
+  crearSubcategoria // <-- AGREGA ESTA LÍNEA AQUÍ
+} from '../controllers/productoController';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -35,5 +39,6 @@ router.get('/', async (req, res) => {
         res.status(500).json({ error: "No se pudieron obtener las categorías" });
     }
 });
-
+// Ruta para crear una subcategoría nueva
+router.post('/:id/subcategorias', crearSubcategoria);
 export default router;

@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import { registrarUsuario, loginUsuario } from '../controllers/authController.js';
+import { loginUsuario, registrarNuevoUsuario } from '../controllers/authController';
 
 const router = Router();
+
+router.post('/register', registrarNuevoUsuario);
 
 router.post('/registro', async (req, res) => {
     try {
@@ -14,8 +17,8 @@ router.post('/registro', async (req, res) => {
 
 router.post('/login', async (req, res) => {
     try {
-        const { email, password } = req.body;
-        const resultado = await loginUsuario(email, password);
+        const { email, passwordPlana } = req.body;
+        const resultado = await loginUsuario(email, passwordPlana || req.body.password );
         res.json(resultado);
     } catch (error: any) {
         res.status(401).json({ error: error.message });

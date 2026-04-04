@@ -1,9 +1,10 @@
 import { Router } from 'express';
-import { obtenerProductos, crearProducto, actualizarProducto, eliminarProducto, buscarProductoPorNombre, obtenerCategorias
+import { obtenerProductos, crearProducto, actualizarProducto, eliminarProducto, buscarProductoPorNombre, obtenerCategorias, registrarEntradaStock
 } from '../controllers/productoController.js';
 import { validarToken } from '../middlewares/authMiddleware.js';
 
 const router = Router();
+router.patch('/:id/entrada', registrarEntradaStock);
 
 // 1. Listar productos
 router.get('/', validarToken, obtenerProductos);

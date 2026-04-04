@@ -19,19 +19,24 @@ export const obtenerProductos = async (req: Request, res: Response) => {
 
 export const crearProducto = async (req: Request, res: Response) => {
     try {
-        const { nombre, precio, stock } = req.body;
+        // 1. Recibimos todos los datos que vienen del formulario
+        const { nombre, precio, stock, categoriaId, subcategoriaId } = req.body;
+
         const nuevo = await prisma.productos.create({
             data: { 
                 nombre, 
                 precio: Number(precio), 
-                costo: Number(precio) * 0.7, // Le inventamos un costo del 70% para que no falle
+                costo: Number(precio) * 0.7, 
                 stock: Number(stock), 
-                categoriaId: 1 // Le ponemos la categoría 1 por defecto para que no falle
+                // 2. Usamos el ID de categoría que seleccionaste
+                categoriaId: Number(categoriaId),
+                // 3. Guardamos la subcategoría (si existe)
+                subcategoriaId: subcategoriaId ? Number(subcategoriaId) : null
             }
         });
         res.status(201).json(nuevo);
     } catch (error: any) {
-        console.error(error); // ESTO HARÁ QUE POR FIN VEAS EL ERROR EN LA TERMINAL
+        console.error("ERROR AL CREAR:", error.message);
         res.status(400).json({ error: "Error al crear: " + error.message });
     }
 };
@@ -39,26 +44,23 @@ export const crearProducto = async (req: Request, res: Response) => {
 export const actualizarProducto = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { nombre, precio, stock, categoriaId } = req.body; 
-
-        // Convertimos a números de forma segura
-        const idNumerico = Number(id);
-        const catId = categoriaId ? Number(categoriaId) : null;
+        const { nombre, precio, stock, categoriaId, subcategoriaId } = req.body; 
 
         const actualizado = await prisma.productos.update({
-            where: { id: idNumerico },
+            where: { id: Number(id) },
             data: {
                 nombre: nombre,
-                precio: precio ? Number(precio) : 0,
-                stock: stock ? Number(stock) : 0,
-                // Solo enviamos categoriaId si es un número válido > 0
-                ...(catId && catId > 0 ? { categoriaId: catId } : {})
+                precio: Number(precio),
+                stock: Number(stock),
+                categoriaId: Number(categoriaId),
+                // Agregamos la subcategoría aquí también
+                subcategoriaId: subcategoriaId ? Number(subcategoriaId) : null
             }
         });
         res.json(actualizado);
     } catch (error: any) {
-        console.error("ERROR DETALLADO:", error.message);
-        res.status(400).json({ error: "Error de Relación: Verifica que la categoría exista en la base de datos." });
+        console.error("ERROR AL ACTUALIZAR:", error.message);
+        res.status(400).json({ error: "Error al actualizar producto" });
     }
 };
 
@@ -116,5 +118,45 @@ export const obtenerStockBajo = async (req: Request, res: Response) => {
         res.json(productos);
     } catch (error: any) {
         res.status(500).json({ error: "Error al consultar stock" });
+    }
+};
+
+// Esta función es para las ENTRADAS (sumar al stock existente)
+export const registrarEntradaStock = async (req: any, res: any) => {
+    try {
+        const { id } = req.params; // El ID del producto
+        const { cantidad } = req.body; // Cuántas unidades llegaron
+
+        const productoActualizado = await prisma.productos.update({
+            where: { id: Number(id) },
+            data: {
+                stock: {
+                    increment: Number(cantidad) // Esto suma automáticamente en la base de datos
+                }
+            }
+        });
+
+        res.status(200).json({ 
+            mensaje: "Entrada de stock registrada", 
+            nuevoStock: productoActualizado.stock 
+        });
+    } catch (error: any) {
+        res.status(500).json({ error: "Error al registrar entrada de mercancía" });
+    }
+};
+
+export const crearSubcategoria = async (req: any, res: any) => {
+    try {
+        const { id } = req.params; // El ID de la categoría (Estuches)
+        const { nombre } = req.body;
+        const nueva = await prisma.subcategorias.create({
+            data: {
+                nombre,
+                categoriaId: Number(id)
+            }
+        });
+        res.status(201).json(nueva);
+    } catch (error) {
+        res.status(400).json({ error: "No se pudo crear la subcategoría" });
     }
 };
