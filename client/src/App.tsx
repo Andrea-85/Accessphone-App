@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import logo from './assets/logo-nuevo.png'; 
+import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js';
+import { Doughnut, Bar } from 'react-chartjs-2';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+// Registramos los componentes de las gráficas
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
 function App() {
   const [pantalla, setPantalla] = useState('inicio');
@@ -16,6 +23,9 @@ function App() {
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string>("");
   const [subcategoriaId, setSubcategoriaId] = useState<number | null>(null);
   const [busqueda, setBusqueda] = useState(""); // Para guardar lo que escribes en la lupa
+  const [mostrarReporteDano, setMostrarReporteDano] = useState(false);
+  const [productoSeleccionadoDano, setProductoSeleccionadoDano] = useState<any>(null);
+  const [motivoDano, setMotivoDano] = useState("");
 
   const colores = {
     fondo: '#050510',
@@ -171,18 +181,50 @@ function App() {
     setMostrarFormulario(true);
   };
 
+  const datosGraficaCategorias = {
+    labels: listaCategorias.map (c => c.nombre),
+    datasets: [
+      { 
+        label : "Valor en Inventario",
+        data: listaCategorias.map (cat => {
+          return listaProductos
+          .filter(p => String(p. categoriaId) === String(cat.id))
+          .reduce((acc, p) => acc + (Number(p.precio) * Number(p.stock)), 0);
+        }),
+        backgroundColor: [
+          '#00ff88', '#7000ff', '#00d1ff', '#ff0055', '#ffcc00'
+        ],
+        borderWidth: 1,
+      },
+    ],      
+  };
+
   return (
     <div style={{ minHeight: '100vh', width: '100vw', backgroundColor: colores.fondo, color: colores.texto, fontFamily: 'sans-serif' }}>
       <nav style={{ padding: '1rem 5%', display: 'flex', justifyContent: 'space-between', background: '#0a0a19', borderBottom: `1px solid ${colores.neonAzul}55` }}>
         <h1 style={{ margin: 0 }}>ACCESS<span style={{ color: colores.neonAzul }}>PHONE</span></h1>
         <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-          <button onClick={() => setPantalla('inicio')} style={navLinkStyle(pantalla === 'inicio', colores)}>INICIO</button>
-          <button onClick={() => setPantalla('inventario')} style={navLinkStyle(pantalla === 'inventario', colores)}>INVENTARIO</button>
-          <button onClick={() => setPantalla('reportes')} style={navLinkStyle(pantalla === 'reportes', colores)}>REPORTES</button>
-          {auth.token && (
-            <button onClick={() => { localStorage.clear(); window.location.reload(); }} style={{ color: '#ff4b2b', border: '1px solid #ff4b2b', background: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer' }}>SALIR</button>
-          )}
-        </div>
+  <button onClick={() => setPantalla('inicio')} style={navLinkStyle(pantalla === 'inicio', colores)}>INICIO</button>
+  <button onClick={() => setPantalla('inventario')} style={navLinkStyle(pantalla === 'inventario', colores)}>INVENTARIO</button>
+  <button onClick={() => setPantalla('reportes')} style={navLinkStyle(pantalla === 'reportes', colores)}>REPORTES</button>
+  
+  {auth.token && (
+    <> {/* <--- Agrega esto */}
+      <button 
+        onClick={() => setPantalla('novedades')} 
+        style={navLinkStyle(pantalla === 'novedades', colores)}
+      >
+        NOVEDADES
+      </button>
+      <button 
+        onClick={() => { localStorage.clear(); window.location.reload(); }} 
+        style={{ color: '#ff4b2b', border: '1px solid #ff4b2b', background: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer' }}
+      >
+        SALIR
+      </button>
+    </> // <--- Y cierra con esto
+  )}
+</div>
       </nav>
 
       <main style={{ padding: '2rem 10%' }}>
@@ -203,8 +245,7 @@ function App() {
       <input type="password" placeholder="Contraseña" style={inputStyle} onChange={(e) => setDatosAuth({...datosAuth, password: e.target.value})} />
       
       <button 
-        onClick={esRegistro ? manejarRegistro : manejarLogin}
-        style={{ ...botonGuardarStyle, width: '100%', marginTop: '10px' }}
+        onClick={esRegistro ? manejarRegistro : manejarLogin} style={{ ...botonGuardarStyle, width: '100%', marginTop: '10px' }}
       >
         {esRegistro ? 'CREAR CUENTA' : 'ENTRAR'}
       </button>
@@ -292,38 +333,65 @@ function App() {
       {listaCategorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
     </select>
 
-    {/* SELECTOR DINÁMICO PARA VIDRIOS O ESTUCHES */}
-    {(() => {
-     const catNombreRaw = listaCategorias.find(c => String(c.id) === String(nuevoProducto.categoriaId))?.nombre || "";
-  const catNombre = catNombreRaw.toUpperCase();
-      if (catNombre === 'Vidrios' || catNombre === 'Estuches') {
-        return (
-          <select 
-            style={{...inputStyle, border: `1px solid ${colores.neonAzul}`, marginTop: '5px'}} 
-            value={nuevoProducto.subcategoriaId || ""}
-            onChange={(e) => setNuevoProducto({...nuevoProducto, subcategoriaId: e.target.value ? Number(e.target.value) : null})}
-          >
-            <option value="">-- Seleccione Tipo de {catNombre === 'Vidrios' ? 'Vidrio' : 'Estuche'} --</option>
-            {catNombre === 'Vidrios' ? (
-              <>
-                <option value="1">5D</option>
-                <option value="2">Cerámico</option>
-                <option value="3">Blindado</option>
-                <option value="4">Mate</option>
-              </>
-            ) : (
-              <>
-                <option value="5">Silicona</option>
-                <option value="6">Con Diseño</option>
-                <option value="7">Space</option>
-                <option value="8">Unicolor</option>
-              </>
-            )}
-          </select>
-        );
-      }
-      return null;
-    })()}
+    {/* SELECTOR DINÁMICO MEJORADO */}
+{(() => {
+  const categoriaSeleccionada = listaCategorias.find(c => String(c.id) === String(nuevoProducto.categoriaId));
+  const nombreCat = (categoriaSeleccionada?.nombre || "").toUpperCase().trim();
+
+  // Si la categoría es Vidrios o Estuches, mostramos el menú
+  if (nombreCat === 'VIDRIOS' || nombreCat === 'ESTUCHES' || nombreCat === 'ACCESORIOS') {
+    return (
+      <div style={{ marginTop: '10px' }}>
+        <label style={{ fontSize: '0.8rem', color: colores.neonAzul }}>Tipo de {nombreCat}:</label>
+        <select 
+          style={{...inputStyle, border: `1px solid ${colores.neonAzul}`, marginTop: '5px'}} 
+          value={nuevoProducto.subcategoriaId || ""}
+          onChange={(e) => setNuevoProducto({...nuevoProducto, subcategoriaId: e.target.value === 'nueva' ? 'nueva' : Number(e.target.value)})}
+        >
+          <option value="">-- Seleccione --</option>
+          {nombreCat === 'VIDRIOS' ? (
+            <>
+              <option value="1">5D</option>
+              <option value="2">Cerámico</option>
+              <option value="3">Blindado</option>
+            </>
+          ) : (
+            <>
+              <option value="5">Silicona</option>
+              <option value="6">Con Diseño</option>
+              <option value="7">Space</option>
+              <option value="8">Unicolor</option>
+            </>
+          )}
+          <option value="nueva" style={{ color: colores.neonRosa, fontWeight: 'bold' }}>+ CREAR NUEVA TIPO...</option>
+        </select>
+
+        {/* CAMPO PARA CREAR SI ELIGEN "NUEVA" */}
+        {nuevoProducto.subcategoriaId === 'nueva' && (
+          <div style={{ display: 'flex', gap: '5px', marginTop: '10px' }}>
+            <input 
+              type="text" 
+              placeholder="Nombre del nuevo tipo..." 
+              style={{ ...inputStyle, flex: 1 }}
+              id="nombreNuevaSub"
+            />
+            <button 
+              onClick={() => {
+                const input = document.getElementById('nombreNuevaSub') as HTMLInputElement;
+                if(input.value) alert("Guardando nueva subcategoría: " + input.value);
+                // Aquí llamaremos a la función crearSubcategoria que hicimos antes
+              }}
+              style={{ ...botonGuardarStyle, padding: '5px' }}
+            >
+              Añadir
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+  return null;
+})()}
 
     <div style={{ marginTop: '20px' }}>
       <button onClick={guardarEnBD} style={botonGuardarStyle}>GUARDAR</button>
@@ -377,6 +445,16 @@ function App() {
         <button onClick={() => prepararEdicion(p)} style={{ background: '#7000ff', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer' }}>Editar</button>
         <button onClick={() => eliminarDeBD(p.id)} style={{ background: '#ff4b2b', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer' }}>Eliminar</button>
         <button onClick={() => manejarEntradaStock(p.id)} style={{ background: '#00ff88', color: '#050510', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>+ Stock</button>
+      <button 
+  onClick={() => {
+    setProductoSeleccionadoDano(producto);
+    setMostrarReporteDano(true);
+  }}
+  style={{ background: 'transparent', border: 'none', cursor: 'pointer', marginLeft: '10px' }}
+  title="Reportar Daño"
+>
+  🚩
+</button>
       </td>
     </tr>
   ))}
@@ -387,37 +465,188 @@ function App() {
             )}
 
             {pantalla === 'reportes' && (
-              <div style={{ width: '100%' }}>
-                <h2 style={{ fontSize: '2.5rem', borderLeft: `8px solid ${colores.neonMorado}`, paddingLeft: '20px', marginBottom: '30px' }}>REPORTES DEL NEGOCIO</h2>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
-                  <div style={cardStyle(colores.neonAzul)}>
-                    <p style={{ margin: 0, opacity: 0.8 }}>VALOR TOTAL DEL INVENTARIO</p>
-                    <h3 style={{ fontSize: '2.5rem', marginTop: '10px' }}>
-                      ${listaProductos.reduce((acc: number, p: any) => acc + (Number(p.precio) * Number(p.stock)), 0).toLocaleString()}
-                    </h3>
-                  </div>
-                  <div style={{ ...cardStyle('#ff4b2b'), textAlign: 'left' }}>
-                    <p style={{ margin: 0, opacity: 0.8 }}>⚠️ STOCK BAJO (Menos de 5)</p>
-                    <div style={{ marginTop: '10px' }}>
-                      {listaProductos.filter((p: any) => p.stock < 5).map((p: any) => (
-                        <div key={p.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '5px 0' }}>
-                          {p.nombre} - <b>{p.stock} unid.</b>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={cardStyle(colores.neonMorado)}>
-                    <p style={{ margin: 0, opacity: 0.8 }}>TOTAL UNIDADES EN STOCK</p>
-                    <h3 style={{ fontSize: '2.5rem', marginTop: '10px' }}>
-                      {listaProductos.reduce((acc: number, p: any) => acc + Number(p.stock), 0)}
-                    </h3>
-                  </div>
-                </div>
-              </div>
-            )}
+  <div style={{ padding: '20px' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+      <h2 style={{ borderLeft: '5px solid #7000ff', paddingLeft: '15px' }}>INFORME ESTRATÉGICO</h2>
+      <button 
+        onClick={() => {
+          const doc = new jsPDF();
+          doc.text("ACCESSPHONE - REPORTE DE INVENTARIO", 10, 10);
+          autoTable(doc, {
+            head: [['Categoría', 'Valor Total']],
+            body: listaCategorias.map(cat => [
+              cat.nombre,
+              "$" + listaProductos
+                .filter(p => String(p.categoriaId) === String(cat.id))
+                .reduce((acc, p) => acc + (Number(p.precio) * Number(p.stock)), 0).toLocaleString()
+            ]),
+          });
+          doc.save(`Reporte_Accessphone_${new Date().toLocaleDateString()}.pdf`);
+        }}
+        style={{ ...botonGuardarStyle, background: '#ff0055' }}
+      >
+        📥 DESCARGAR PDF
+      </button>
+    </div>
+
+    {/* TARJETAS SUPERIORES RECUADRADAS */}
+<div style={{ 
+  display: 'grid', 
+  gridTemplateColumns: 'repeat(3, 1fr)', // Esto fuerza a que sean 3 columnas iguales
+  gap: '15px', 
+  marginBottom: '30px' 
+}}>
+  {/* Tarjeta 1: Valor Total */}
+  <div style={cardStyle(colores.neonAzul)}>
+    <p style={{ fontSize: '0.7rem', opacity: 0.8 }}>VALOR TOTAL INVENTARIO</p>
+    <h3 style={{ fontSize: '1.8rem' }}>
+      ${listaProductos.reduce((acc: number, p: any) => acc + (Number(p.precio) * Number(p.stock)), 0).toLocaleString()}
+    </h3>
+  </div>
+
+  {/* Tarjeta 2: Stock Bajo (LA QUE SE HABÍA PERDIDO) */}
+  <div style={cardStyle('#ff4444')}>
+    <p style={{ fontSize: '0.7rem', opacity: 0.8 }}>⚠️ STOCK BAJO (Menos de 5)</p>
+    {listaProductos.filter(p => Number(p.stock) < 5).length > 0 ? (
+      <h3 style={{ fontSize: '1.8rem', color: '#ffcc00' }}>
+        {listaProductos.filter(p => Number(p.stock) < 5).length} Productos
+      </h3>
+    ) : (
+      <h3 style={{ fontSize: '1.2rem', marginTop: '10px', color: '#00ff88' }}>✅ Todo al día</h3>
+    )}
+  </div>
+
+  {/* Tarjeta 3: Unidades Totales */}
+  <div style={cardStyle('#7000ff')}>
+    <p style={{ fontSize: '0.7rem', opacity: 0.8 }}>📦 UNIDADES EN STOCK</p>
+    <h3 style={{ fontSize: '1.8rem' }}>
+      {listaProductos.reduce((acc: number, p: any) => acc + Number(p.stock), 0)}
+    </h3>
+  </div>
+</div>
+
+    {/* SECCIÓN DE GRÁFICAS */}
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '20px', background: 'rgba(255,255,255,0.02)', padding: '20px', borderRadius: '15px' }}>
+      <div style={{ textAlign: 'center' }}>
+        <h4>Distribución por Categoría</h4>
+        <div style={{ width: '300px', margin: '0 auto' }}>
+          <Doughnut data={datosGraficaCategorias} />
+        </div>
+      </div>
+      {/* SECCIÓN DE RECOMENDACIÓN DE INVERSIÓN */}
+<div style={{ 
+  marginTop: '30px', 
+  padding: '20px', 
+  background: 'rgba(112, 0, 255, 0.1)', 
+  border: '1px solid #7000ff', 
+  borderRadius: '15px' 
+}}>
+  <h4 style={{ color: '#00d1ff' }}>💡 Sugerencia de Inversión</h4>
+  <p style={{ fontSize: '1rem' }}>
+    {listaProductos.filter(p => Number(p.stock) < 3).length > 0 ? (
+      <>
+        Andrea, tienes <strong>{listaProductos.filter(p => Number(p.stock) < 3).length} productos</strong> críticos. 
+        Te sugiero invertir primero en reponer <strong>{listaProductos.find(p => Number(p.stock) < 3)?.modelo}</strong>.
+      </>
+    ) : (
+      "Tu stock está sano. Si tienes capital extra, podrías invertir en nuevas tendencias de Estuches para aumentar variedad."
+    )}
+  </p>
+  
+  {/* Botón rápido para ver qué falta */}
+  <button 
+    onClick={() => setFiltroCategoria('bajo-stock')} // Si creamos este filtro
+    style={{ ...botonGuardarStyle, marginTop: '10px', fontSize: '0.8rem' }}
+  >
+    VER LISTA DE COMPRAS SUGERIDA
+  </button>
+</div>
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <h4>Análisis de Inversión</h4>
+        <p style={{ fontSize: '0.9rem', color: '#ccc' }}>
+          Este gráfico muestra dónde tienes invertido tu capital actualmente. 
+          Recuerda que los <strong>Estuches</strong> suelen tener mayor rotación.
+        </p>
+      </div>
+    </div>
+  </div>
+)}
+{pantalla === 'novedades' && (
+  <div style={{ padding: '20px' }}>
+    <h2 style={{ borderLeft: '5px solid #ffcc00', paddingLeft: '15px' }}>GESTIÓN DE NOVEDADES</h2>
+    <p style={{ opacity: 0.7 }}>Aquí verás el historial de productos dañados o devoluciones.</p>
+    
+    <div style={{ background: 'rgba(255,255,255,0.05)', padding: '20px', borderRadius: '15px', marginTop: '20px' }}>
+      <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid #333' }}>
+            <th style={{ padding: '10px' }}>Fecha</th>
+            <th>Producto</th>
+            <th>Cantidad</th>
+            <th>Motivo</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style={{ padding: '10px', opacity: 0.5 }}>{new Date().toLocaleDateString()}</td>
+            <td>Ejemplo: Vidrio 5D</td>
+            <td>5</td>
+            <td>Dañado por transportadora</td>
+            <td style={{ color: '#ffcc00' }}>Pendiente de Revisión</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
           </>
         )}
       </main>
+     {mostrarReporteDano && (
+  <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+    <div style={{ background: '#1a1a1a', padding: '25px', borderRadius: '15px', border: `1px solid ${colores.neonRosa}`, width: '400px' }}>
+      <h3 style={{ color: colores.neonRosa }}>🚩 Reportar Daño / Baja</h3>
+      <p>Producto: <strong>{productoSeleccionadoDano?.modelo}</strong></p>
+      
+      <label style={{ fontSize: '0.8rem', marginTop: '10px', display: 'block' }}>¿Cuántas unidades se dañaron?</label>
+      <input 
+        type="number" 
+        id="cantidadDano" 
+        defaultValue="1" 
+        style={{ ...inputStyle, width: '60px', marginBottom: '15px' }} 
+      />
+
+      <label style={{ fontSize: '0.8rem', display: 'block' }}>Motivo (Fábrica, Transporte, Local):</label>
+      <textarea id="motivoDano" placeholder="Ej: Llegó quebrado en la caja..." style={{ ...inputStyle, height: '60px' }} />
+      
+      <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+        <button onClick={() => setMostrarReporteDano(false)} style={{ flex: 1, padding: '10px', borderRadius: '5px' }}>Cancelar</button>
+        <button 
+          onClick={() => {
+            const cant = Number((document.getElementById('cantidadDano') as HTMLInputElement).value);
+            const mot = (document.getElementById('motivoDano') as HTMLInputElement).value;
+            
+            // LÓGICA DE RESTA AUTOMÁTICA
+            const listaActualizada = listaProductos.map(p => {
+              if (p.id === productoSeleccionadoDano.id) {
+                return { ...p, stock: p.stock - cant }; // Restamos la cantidad
+              }
+              return p;
+            });
+            
+            setListaProductos(listaActualizada); // Actualizamos el inventario visualmente
+            alert(`¡Inventario Actualizado! Se descontaron ${cant} unidades de ${productoSeleccionadoDano.modelo}`);
+            setMostrarReporteDano(false);
+          }} 
+          style={{ flex: 1, padding: '10px', background: colores.neonRosa, color: 'white', border: 'none', borderRadius: '5px' }}
+        >
+          Confirmar y Restar
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }
