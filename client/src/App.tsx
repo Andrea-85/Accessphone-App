@@ -10,6 +10,7 @@ ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarEle
 
 function App() {
   const [pantalla, setPantalla] = useState('inicio');
+  const [historialPantallas, setHistorialPantallas] = useState([]);
   const [auth, setAuth] = useState({ token: localStorage.getItem('token'), usuario: JSON.parse(localStorage.getItem('usuario') || 'null') });
   const [datosAuth, setDatosAuth] = useState({ email: '', password: '', nombre: '' });
   const [esRegistro, setEsRegistro] = useState(false);
@@ -27,7 +28,24 @@ function App() {
   const [productoSeleccionadoDano, setProductoSeleccionadoDano] = useState<any>(null);
   const [motivoDano, setMotivoDano] = useState("");
   const usuario = JSON.parse(localStorage.getItem("usuario"));
+  const cambiarPantalla = (nuevaPantalla) => {
+  setHistorialPantallas(prev => [...prev, pantalla]);
+  setPantalla(nuevaPantalla);
+};
+const volverAtras = () => {
+  setHistorialPantallas(prev => {
+    if (prev.length === 0) {
+      setPantalla('inicio');
+      return prev;
+    }
 
+    const nuevoHistorial = [...prev];
+    const ultimaPantalla = nuevoHistorial.pop();
+
+    setPantalla(ultimaPantalla || 'inicio');
+    return nuevoHistorial;
+  });
+};
   const colores = {
     fondo: '#050510',
     neonAzul: '#00d2ff',
@@ -206,8 +224,10 @@ function App() {
         <h1 style={{ margin: 0 }}>ACCESS<span style={{ color: colores.neonAzul }}>PHONE</span></h1>
         <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
   <button onClick={() => setPantalla('inicio')} style={navLinkStyle(pantalla === 'inicio', colores)}>INICIO</button>
-  <button onClick={() => setPantalla('inventario')} style={navLinkStyle(pantalla === 'inventario', colores)}>INVENTARIO</button>
-  <button onClick={() => setPantalla('reportes')} style={navLinkStyle(pantalla === 'reportes', colores)}>REPORTES</button>
+  <button onClick={() => cambiarPantalla('inventario')} style={navLinkStyle(pantalla === 'inventario', colores)}>
+  INVENTARIO
+</button>
+  <button onClick={() => cambiarPantalla('reportes')} style={navLinkStyle(pantalla === 'reportes', colores)}>REPORTES</button>
   
   {auth.token && (
     <> {/* <--- Agrega esto */}
@@ -268,7 +288,7 @@ function App() {
             {pantalla === 'inicio' && (
               <div>
                 <h2>
-  Bienvenida,{" "}
+  Hola,{" "}
   <span style={{ color: colores.neonAzul }}>
     {usuario?.nombre || usuario?.usuario || "Usuario"}
   </span>
@@ -609,6 +629,35 @@ function App() {
           </>
         )}
       </main>
+      {pantalla !== 'inicio' && (
+  <button 
+    onClick={volverAtras}
+    style={{
+      position: 'fixed',
+      bottom: '25px',
+      left: '25px',
+      background: 'transparent',
+      border: 'none',
+      color: colores.neonAzul,
+      fontSize: '28px',
+      cursor: 'pointer',
+      padding: '6px',
+      lineHeight: '1',
+      transition: 'all 0.2s ease',
+      textShadow: `0 0 8px ${colores.neonAzul}`
+    }}
+    onMouseOver={(e) => {
+      e.currentTarget.style.transform = 'scale(1.2)';
+      e.currentTarget.style.filter = 'brightness(1.3)';
+    }}
+    onMouseOut={(e) => {
+      e.currentTarget.style.transform = 'scale(1)';
+      e.currentTarget.style.filter = 'brightness(1)';
+    }}
+  >
+    ‹
+  </button>
+)}
      {mostrarReporteDano && (
   <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
     <div style={{ background: '#1a1a1a', padding: '25px', borderRadius: '15px', border: `1px solid ${colores.neonRosa}`, width: '400px' }}>
