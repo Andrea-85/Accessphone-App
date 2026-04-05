@@ -26,6 +26,7 @@ function App() {
   const [mostrarReporteDano, setMostrarReporteDano] = useState(false);
   const [productoSeleccionadoDano, setProductoSeleccionadoDano] = useState<any>(null);
   const [motivoDano, setMotivoDano] = useState("");
+  const usuario = JSON.parse(localStorage.getItem("usuario"));
 
   const colores = {
     fondo: '#050510',
@@ -266,7 +267,12 @@ function App() {
           <>
             {pantalla === 'inicio' && (
               <div>
-                <h2>Bienvenida, <span style={{ color: colores.neonAzul }}>Andrea</span></h2>
+                <h2>
+  Bienvenida,{" "}
+  <span style={{ color: colores.neonAzul }}>
+    {usuario?.nombre || usuario?.usuario || "Usuario"}
+  </span>
+</h2>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
                   {listaCategorias.map((cat) => (
                     <div key={cat.id} onClick={() => { setFiltroCategoria(cat.id.toString()); setPantalla('inventario'); }} style={cardStyle(colores.neonAzul)}>
