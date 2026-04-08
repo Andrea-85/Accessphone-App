@@ -467,28 +467,30 @@ const volverAtras = () => {
       <td style={{ textAlign: 'center' }}>{p.stock}</td>
       
       {/* TUS BOTONES ORIGINALES (No los toqué) */}
-      <td style={{ display: 'flex', gap: '10px', justifyContent: 'center', padding: '10px' }}>
-        <button onClick={() => prepararEdicion(p)} style={{ background: '#7000ff', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer' }}>Editar</button>
-        <button onClick={() => eliminarDeBD(p.id)} style={{ background: '#ff4b2b', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer' }}>Eliminar</button>
-        <button onClick={() => manejarEntradaStock(p.id)} style={{ background: '#00ff88', color: '#050510', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>+ Stock</button>
-      <button 
-  onClick={() => {
-    setProductoSeleccionadoDano(producto);
-    setMostrarReporteDano(true);
-  }}
-  style={{ background: 'transparent', border: 'none', cursor: 'pointer', marginLeft: '10px' }}
-  title="Reportar Daño"
->
-  🚩
-</button>
-      </td>
+     <td style={{ display: 'flex', gap: '10px', justifyContent: 'center', padding: '10px' }}>
+  <button onClick={() => prepararEdicion(p)} style={{ background: '#7000ff', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer' }}>Editar</button>
+  <button onClick={() => eliminarDeBD(p.id)} style={{ background: '#ff4b2b', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer' }}>Eliminar</button>
+  <button onClick={() => manejarEntradaStock(p.id)} style={{ background: '#00ff88', color: '#050510', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>+ Stock</button>
+  
+  {/* BANDERITA CORREGIDA: Cambiamos 'producto' por 'p' */}
+  <button 
+    onClick={() => {
+      setProductoSeleccionadoDano(p); // Usamos 'p' para que coincida con el resto
+      setMostrarReporteDano(true);
+    }}
+    style={{ background: 'transparent', border: 'none', cursor: 'pointer', marginLeft: '10px' }}
+    title="Reportar Daño"
+  >
+    🚩
+  </button>
+</td>
     </tr>
   ))}
 </tbody>
-                  </table>
-                )}
-              </div>
-            )}
+  </table>
+   )}
+  </div>
+       )}
 
             {pantalla === 'reportes' && (
   <div style={{ padding: '20px' }}>
@@ -599,31 +601,77 @@ const volverAtras = () => {
 )}
 {pantalla === 'novedades' && (
   <div style={{ padding: '20px' }}>
-    <h2 style={{ borderLeft: '5px solid #ffcc00', paddingLeft: '15px' }}>GESTIÓN DE NOVEDADES</h2>
-    <p style={{ opacity: 0.7 }}>Aquí verás el historial de productos dañados o devoluciones.</p>
+    <h2 style={{ borderLeft: '5px solid #ffcc00', paddingLeft: '15px', color: '#ffcc00' }}>
+      GESTIÓN DE NOVEDADES Y DAÑOS
+    </h2>
     
-    <div style={{ background: 'rgba(255,255,255,0.05)', padding: '20px', borderRadius: '15px', marginTop: '20px' }}>
-      <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ borderBottom: '1px solid #333' }}>
-            <th style={{ padding: '10px' }}>Fecha</th>
-            <th>Producto</th>
-            <th>Cantidad</th>
-            <th>Motivo</th>
-            <th>Estado</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td style={{ padding: '10px', opacity: 0.5 }}>{new Date().toLocaleDateString()}</td>
-            <td>Ejemplo: Vidrio 5D</td>
-            <td>5</td>
-            <td>Dañado por transportadora</td>
-            <td style={{ color: '#ffcc00' }}>Pendiente de Revisión</td>
-          </tr>
-        </tbody>
-      </table>
+    <div style={{ background: 'rgba(255,255,255,0.05)', padding: '25px', borderRadius: '15px', marginBottom: '30px', border: '1px solid #333' }}>
+      <h4 style={{ color: '#00d1ff', marginTop: 0 }}>+ REGISTRAR REPORTE OFICIAL</h4>
+      
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+        
+        {/* FECHA (Automática para control) */}
+        <div>
+          <label style={{ display: 'block', fontSize: '0.8rem', color: '#888' }}>Fecha del Reporte:</label>
+          <input type="text" value={new Date().toLocaleString()} disabled style={{ ...inputStyle, backgroundColor: '#222', cursor: 'not-allowed' }} />
+        </div>
+
+        {/* NOMBRE DEL EMPLEADO */}
+        <div>
+          <label style={{ display: 'block', fontSize: '0.8rem', color: '#00d1ff' }}>Reportado por:</label>
+          <input type="text" id="nombreEmpleado" placeholder="Tu nombre completo" style={inputStyle} />
+        </div>
+
+        {/* PRODUCTO Y MOTIVO */}
+        <input type="text" id="productoNovedad" placeholder="Producto (ej: Vidrio 5D iPhone 13)" style={inputStyle} />
+        
+        <select id="tipoNovedad" style={inputStyle}>
+          <option value="fabrica">Daño de Fábrica / Garantía</option>
+          <option value="transportadora">Daño de Transportadora</option>
+          <option value="local">Daño en Tienda / Accidente</option>
+          <option value="bateria">Batería Pegada / Mal estado</option>
+        </select>
+
+        {/* DESCRIPCIÓN LARGA */}
+        <textarea 
+          id="descripcionNovedad"
+          placeholder="Describe detalladamente lo sucedido para el reclamo o ajuste..." 
+          style={{ ...inputStyle, gridColumn: 'span 2', height: '80px' }} 
+        />
+        
+        {/* CAMPO DE FOTO CON INDICADOR */}
+        <div style={{ gridColumn: 'span 2', background: '#000', padding: '15px', borderRadius: '10px', border: '1px dashed #555' }}>
+          <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '10px' }}>📸 Adjuntar Evidencia Fotográfica:</label>
+          <input type="file" accept="image/*" id="fotoNovedad" style={{ color: '#888' }} />
+        </div>
+      </div>
+
+      {/* BOTÓN PARA GENERAR LA NOVEDAD */}
+      <button 
+        onClick={() => {
+          const empleado = (document.getElementById('nombreEmpleado') as HTMLInputElement).value;
+          const producto = (document.getElementById('productoNovedad') as HTMLInputElement).value;
+          
+          if(!empleado || !producto) {
+            alert("Por favor pon tu nombre y el producto para poder guardar.");
+            return;
+          }
+
+          alert(`✅ Reporte de ${producto} generado con éxito por ${empleado}. Claudia podrá conectar esto a la base de datos ahora.`);
+          // Aquí Claudia podrá hacer el fetch para guardar la foto y los datos en la BD
+        }}
+        style={{ 
+          marginTop: '20px', width: '100%', padding: '15px', 
+          background: '#00ff88', color: '#000', fontWeight: 'bold', 
+          border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem' 
+        }}
+      >
+        GUARDAR REPORTE EN EL SISTEMA
+      </button>
     </div>
+
+    {/* TABLA DE HISTORIAL (Debajo del formulario) */}
+    {/* ... (aquí sigue tu tabla que ya tenías) ... */}
   </div>
 )}
           </>
@@ -659,44 +707,59 @@ const volverAtras = () => {
   </button>
 )}
      {mostrarReporteDano && (
-  <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-    <div style={{ background: '#1a1a1a', padding: '25px', borderRadius: '15px', border: `1px solid ${colores.neonRosa}`, width: '400px' }}>
-      <h3 style={{ color: colores.neonRosa }}>🚩 Reportar Daño / Baja</h3>
-      <p>Producto: <strong>{productoSeleccionadoDano?.modelo}</strong></p>
+  <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.9)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+    <div style={{ background: '#1a1a1a', padding: '25px', borderRadius: '15px', border: `2px solid #00d1ff`, width: '400px', color: 'white' }}>
+      <h3 style={{ color: '#00d1ff', marginTop: 0 }}>🚩 Reportar Daño / Baja</h3>
+      <p style={{ color: '#ccc' }}>Producto: <strong style={{ color: 'white' }}>{productoSeleccionadoDano?.modelo}</strong></p>
       
-      <label style={{ fontSize: '0.8rem', marginTop: '10px', display: 'block' }}>¿Cuántas unidades se dañaron?</label>
+      <label style={{ fontSize: '0.8rem', marginTop: '10px', display: 'block', color: '#00d1ff' }}>¿Cuántas unidades se dañaron?</label>
       <input 
         type="number" 
         id="cantidadDano" 
         defaultValue="1" 
-        style={{ ...inputStyle, width: '60px', marginBottom: '15px' }} 
+        style={{ width: '100%', padding: '10px', marginTop: '5px', borderRadius: '5px', border: '1px solid #333', background: '#000', color: 'white' }} 
       />
 
-      <label style={{ fontSize: '0.8rem', display: 'block' }}>Motivo (Fábrica, Transporte, Local):</label>
-      <textarea id="motivoDano" placeholder="Ej: Llegó quebrado en la caja..." style={{ ...inputStyle, height: '60px' }} />
+      <label style={{ fontSize: '0.8rem', marginTop: '10px', display: 'block', color: '#00d1ff' }}>Breve nota del daño:</label>
+      <textarea 
+        id="motivoDanoRapido" 
+        placeholder="Ej: Vidrio quebrado..." 
+        style={{ width: '100%', padding: '10px', marginTop: '5px', borderRadius: '5px', border: '1px solid #333', background: '#000', color: 'white', height: '60px' }} 
+      />
       
       <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-        <button onClick={() => setMostrarReporteDano(false)} style={{ flex: 1, padding: '10px', borderRadius: '5px' }}>Cancelar</button>
+        <button 
+          onClick={() => setMostrarReporteDano(false)} 
+          style={{ flex: 1, padding: '12px', borderRadius: '5px', border: '1px solid #555', background: '#333', color: 'white', cursor: 'pointer' }}
+        >
+          Cancelar
+        </button>
         <button 
           onClick={() => {
             const cant = Number((document.getElementById('cantidadDano') as HTMLInputElement).value);
-            const mot = (document.getElementById('motivoDano') as HTMLInputElement).value;
             
-            // LÓGICA DE RESTA AUTOMÁTICA
+            // 1. Restamos del inventario
             const listaActualizada = listaProductos.map(p => {
               if (p.id === productoSeleccionadoDano.id) {
-                return { ...p, stock: p.stock - cant }; // Restamos la cantidad
+                const nuevoStock = Number(p.stock) - cant;
+               return { ...p, stock: nuevoStock < 0 ? 0 : nuevoStock };
               }
               return p;
             });
             
-            setListaProductos(listaActualizada); // Actualizamos el inventario visualmente
-            alert(`¡Inventario Actualizado! Se descontaron ${cant} unidades de ${productoSeleccionadoDano.modelo}`);
-            setMostrarReporteDano(false);
+            setListaProductos(listaActualizada);
+            setMostrarReporteDano(false); // Cierra el cuadro
+            setPantalla('novedades');    // <--- ESTO TE LLEVA A LA PANTALLA DE NOVEDADES
+            
+            setTimeout(() => {
+              const inputProd = document.getElementById("productoNovedad") as HTMLInputElement;
+              
+              alert(`Se descontaron ${cant} unidades. Ahora por favor registra la foto y el detalle aquí en Novedades.`);
+            }, 100);
           }} 
-          style={{ flex: 1, padding: '10px', background: colores.neonRosa, color: 'white', border: 'none', borderRadius: '5px' }}
+          style={{ flex: 1, padding: '12px', background: '#00d1ff', color: '#000', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer' }}
         >
-          Confirmar y Restar
+          CONFIRMAR Y RESTAR
         </button>
       </div>
     </div>
