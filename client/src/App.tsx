@@ -26,7 +26,15 @@ function App() {
   const [busqueda, setBusqueda] = useState(""); // Para guardar lo que escribes en la lupa
   const [mostrarReporteDano, setMostrarReporteDano] = useState(false);
   const [productoSeleccionadoDano, setProductoSeleccionadoDano] = useState<any>(null);
+  const [ventaActual, setVentaActual] = useState<any[]>([]);
+  const [clienteVenta, setClienteVenta] = useState("");
+  const [documentoVenta, setDocumentoVenta] = useState("");
+  const [cantidadVenta, setCantidadVenta] = useState("");
+  const [productoVenta, setProductoVenta] = useState<any>(null);
   const [motivoDano, setMotivoDano] = useState("");
+  const [modoVenta, setModoVenta] = useState("inventario"); 
+  const [productoManual, setProductoManual] = useState("");
+  const [precioManual, setPrecioManual] = useState("");
   const usuario = JSON.parse(localStorage.getItem("usuario"));
   const cambiarPantalla = (nuevaPantalla) => {
   setHistorialPantallas(prev => [...prev, pantalla]);
@@ -199,6 +207,24 @@ const volverAtras = () => {
     setEditando(true);
     setMostrarFormulario(true);
   };
+  const descontarStock = async () => {
+  try {
+    for (let item of ventaActual) {
+      await fetch(`http://localhost:3000/api/productos/${item.id}/salida`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${auth.token}`
+        },
+        body: JSON.stringify({ cantidad: item.cantidad })
+      });
+    }
+    cargarProductos();
+  } catch (e) {
+    console.error(e);
+    alert("Error al descontar stock");
+  }
+};
 
   const datosGraficaCategorias = {
     labels: listaCategorias.map (c => c.nombre),
@@ -228,6 +254,9 @@ const volverAtras = () => {
   INVENTARIO
 </button>
   <button onClick={() => cambiarPantalla('reportes')} style={navLinkStyle(pantalla === 'reportes', colores)}>REPORTES</button>
+  <button onClick={() => cambiarPantalla('ventas')} style={navLinkStyle(pantalla === 'ventas', colores)}>
+  VENTAS
+</button>
   
   {auth.token && (
     <> {/* <--- Agrega esto */}
@@ -597,6 +626,254 @@ const volverAtras = () => {
         </p>
       </div>
     </div>
+  </div>
+)}
+{pantalla === 'ventas' && (
+  <div style={{ padding: '20px' }}>
+    
+    <h2 style={{ borderLeft: `5px solid ${colores.neonAzul}`, paddingLeft: '15px' }}>
+      MÓDULO DE VENTAS
+    </h2>
+
+    {/* FORMULARIO DE VENTA */}
+    <div style={{ 
+      background: colores.tarjeta, 
+      padding: '20px', 
+      borderRadius: '15px', 
+      marginTop: '20px',
+      border: `1px solid ${colores.neonAzul}33`
+    }}>
+      
+      <h4 style={{ color: colores.neonAzul }}>Registrar Venta</h4>
+      <div style={{ marginBottom: '15px' }}>
+  <label style={{ color: colores.neonAzul }}>Tipo de venta:</label>
+  <select 
+    value={modoVenta}
+    onChange={(e) => setModoVenta(e.target.value)}
+    style={inputStyle}
+  >
+    <option value="inventario">Producto de inventario</option>
+    <option value="manual">Venta manual</option>
+  </select>
+</div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+        
+   <input 
+     type="text" 
+     placeholder="Nombre del cliente"
+     value={clienteVenta}
+     onChange={(e) => setClienteVenta(e.target.value)}
+     style={inputStyle}
+/>
+
+        <input 
+    type="text" 
+    placeholder="Documento / Teléfono"
+    value={documentoVenta}
+    onChange={(e) => setDocumentoVenta(e.target.value)}
+    style={inputStyle}
+/>
+
+  {modoVenta === "inventario" ? (
+  <>
+    <select 
+      style={inputStyle}
+      onChange={(e) => {
+        const productoSeleccionado = listaProductos.find(p => String(p.id) === e.target.value);
+        setProductoVenta(productoSeleccionado);
+      }}
+    >
+      <option value="">Seleccionar producto</option>
+      {listaProductos.map((p) => (
+        <option key={p.id} value={p.id}>
+          {p.nombre} - Stock: {p.stock}
+        </option>
+      ))}
+    </select>
+
+    <input 
+      type="text" 
+      placeholder="Precio" 
+      value={productoVenta ? `$ ${Number(productoVenta.precio).toLocaleString()}` : ""}
+      disabled
+      style={{ ...inputStyle, backgroundColor: '#222' }}
+    />
+  </>
+) : (
+  <>
+    <input 
+      type="text"
+      placeholder="Nombre del producto"
+      value={productoManual}
+      onChange={(e) => setProductoManual(e.target.value)}
+      style={inputStyle}
+    />
+    <input 
+  type="number"
+  placeholder="Precio manual"
+  value={precioManual}
+  onChange={(e) => setPrecioManual(e.target.value)}
+  style={{ ...inputStyle, color: 'white', backgroundColor: '#000' }}
+/>
+  </>
+)}
+        <input 
+  type="number" 
+  placeholder="Cantidad"
+  value={cantidadVenta}
+  onChange={(e) => setCantidadVenta(e.target.value)}
+  style={inputStyle}
+/>
+
+      </div>
+          <button 
+onClick={() => {
+  const cantidad = Number(cantidadVenta);
+
+  if (cantidad <= 0) {
+    alert("Ingresa una cantidad válida");
+    return;
+  }
+
+  let nuevaVenta;
+
+  if (modoVenta === "inventario") {
+    if (!productoVenta) {
+      alert("Selecciona un producto");
+      return;
+    }
+
+    nuevaVenta = {
+      id: productoVenta.id,
+      nombre: productoVenta.nombre,
+      cantidad,
+      precio: productoVenta.precio,
+      total: productoVenta.precio * cantidad
+    };
+
+  } else {
+    if (!productoManual || !precioManual) {
+      alert("Completa producto y precio manual");
+      return;
+    }
+
+    nuevaVenta = {
+      nombre: productoManual,
+      cantidad,
+      precio: Number(precioManual),
+      total: Number(precioManual) * cantidad
+    };
+  }
+
+  setVentaActual([...ventaActual, nuevaVenta]);
+
+  // limpiar campos
+  setCantidadVenta("");
+  setProductoManual("");
+  setPrecioManual("");
+}}
+  style={{ ...botonGuardarStyle, marginTop: '15px' }}
+>
+  + AGREGAR A LA VENTA
+</button>
+      </div>
+
+    {/* TABLA DE PRODUCTOS EN LA VENTA */}
+    <div style={{ marginTop: '30px' }}>
+      <h4>Detalle de Venta</h4>
+
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ borderBottom: `2px solid ${colores.neonAzul}` }}>
+            <th style={{ textAlign: 'left' }}>Producto</th>
+            <th>Cantidad</th>
+            <th>Precio</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+
+    <tbody>
+  {ventaActual.length === 0 ? (
+    <tr>
+      <td colSpan="4" style={{ textAlign: 'center', padding: '20px', color: '#888' }}>
+        Aún no hay productos en la venta
+      </td>
+    </tr>
+  ) : (
+    ventaActual.map((item, index) => (
+      <tr key={index}>
+        <td>{item.nombre}</td>
+        <td style={{ textAlign: 'center' }}>{item.cantidad}</td>
+        <td style={{ textAlign: 'center' }}>${item.precio}</td>
+        <td style={{ textAlign: 'center' }}>${item.total}</td>
+      </tr>
+    ))
+  )}
+</tbody>
+      </table>
+    </div>
+
+    {/* TOTAL Y FACTURA */}
+    <div style={{ 
+      marginTop: '30px', 
+      padding: '20px', 
+      borderRadius: '15px', 
+      background: 'rgba(0,255,136,0.05)',
+      border: '1px solid #00ff88'
+    }}>
+      
+      <h3>
+  Total: $
+  {ventaActual.reduce((acc, item) => acc + item.total, 0)}
+</h3>
+
+      <button 
+  onClick={async () => {
+    if (ventaActual.length === 0) {
+      alert("No hay productos en la venta");
+      return;
+    }
+
+    const doc = new jsPDF();
+
+    doc.text("ACCESSPHONE", 10, 10);
+    doc.text(`Cliente: ${clienteVenta}`, 10, 20);
+    doc.text(`Documento: ${documentoVenta}`, 10, 30);
+
+    autoTable(doc, {
+      startY: 40,
+      head: [['Producto', 'Cantidad', 'Precio', 'Total']],
+      body: ventaActual.map(item => [
+        item.nombre,
+        item.cantidad,
+        "$" + item.precio,
+        "$" + item.total
+      ])
+    });
+
+    const totalFinal = ventaActual.reduce((acc, item) => acc + item.total, 0);
+
+    doc.text(`TOTAL: $${totalFinal}`, 10, doc.lastAutoTable.finalY + 10);
+
+    doc.save(`Factura_${new Date().getTime()}.pdf`);
+
+    await descontarStock();
+
+    setVentaActual([]);
+    setClienteVenta("");
+    setDocumentoVenta("");
+    setCantidadVenta("");
+
+    alert("✅ Venta registrada correctamente");
+  }}
+  style={{ ...botonGuardarStyle, marginTop: '10px' }}
+>
+  GENERAR FACTURA
+  </button>
+
+    </div>
+
   </div>
 )}
 {pantalla === 'novedades' && (
