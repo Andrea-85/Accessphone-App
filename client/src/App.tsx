@@ -243,7 +243,7 @@ const volverAtras = () => {
       },
     ],      
   };
-
+  const totalVenta = ventaActual.reduce((acc, item) => acc + item.total, 0);
   return (
     <div style={{ minHeight: '100vh', width: '100vw', backgroundColor: colores.fondo, color: colores.texto, fontFamily: 'sans-serif' }}>
       <nav style={{ padding: '1rem 5%', display: 'flex', justifyContent: 'space-between', background: '#0a0a19', borderBottom: `1px solid ${colores.neonAzul}55` }}>
@@ -786,11 +786,12 @@ onClick={() => {
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr style={{ borderBottom: `2px solid ${colores.neonAzul}` }}>
-            <th style={{ textAlign: 'left' }}>Producto</th>
-            <th>Cantidad</th>
-            <th>Precio</th>
-            <th>Total</th>
-          </tr>
+          <th style={{ textAlign: 'left' }}>Producto</th>
+          <th>Cantidad</th>
+          <th>Precio</th>
+          <th>Total</th>
+          <th></th> {/* 👈 columna para eliminar */}
+</tr>
         </thead>
 
     <tbody>
@@ -801,14 +802,73 @@ onClick={() => {
       </td>
     </tr>
   ) : (
-    ventaActual.map((item, index) => (
-      <tr key={index}>
-        <td>{item.nombre}</td>
-        <td style={{ textAlign: 'center' }}>{item.cantidad}</td>
-        <td style={{ textAlign: 'center' }}>${item.precio}</td>
-        <td style={{ textAlign: 'center' }}>${item.total}</td>
-      </tr>
-    ))
+ventaActual.map((item, index) => (
+  <tr key={index} style={{ textAlign: 'center' }}>
+
+    <td style={{ textAlign: 'left' }}>{item.nombre}</td>
+
+    <td>
+      <span 
+        onClick={() => {
+          const nuevaLista = [...ventaActual];
+          if (nuevaLista[index].cantidad > 1) {
+            nuevaLista[index].cantidad--;
+            nuevaLista[index].total = nuevaLista[index].cantidad * nuevaLista[index].precio;
+            setVentaActual(nuevaLista);
+          }
+        }}
+        style={{
+          cursor: 'pointer',
+          color: colores.neonAzul,
+          fontSize: '18px',
+          marginRight: '8px'
+        }}
+      >
+        −
+      </span>
+
+      {item.cantidad}
+
+      <span 
+        onClick={() => {
+          const nuevaLista = [...ventaActual];
+          nuevaLista[index].cantidad++;
+          nuevaLista[index].total = nuevaLista[index].cantidad * nuevaLista[index].precio;
+          setVentaActual(nuevaLista);
+        }}
+        style={{
+          cursor: 'pointer',
+          color: colores.neonAzul,
+          fontSize: '18px',
+          marginLeft: '8px'
+        }}
+      >
+        +
+      </span>
+    </td>
+
+    <td>${item.precio}</td>
+
+    <td>${item.total}</td>
+
+    <td>
+      <span 
+        onClick={() => {
+          const nuevaLista = ventaActual.filter((_, i) => i !== index);
+          setVentaActual(nuevaLista);
+        }}
+        style={{
+          cursor: 'pointer',
+          color: '#ff4b2b',
+          fontSize: '18px'
+        }}
+      >
+        ✕
+      </span>
+    </td>
+
+  </tr>
+))
   )}
 </tbody>
       </table>
@@ -823,13 +883,19 @@ onClick={() => {
       border: '1px solid #00ff88'
     }}>
       
-      <h3>
-  Total: $
-  {ventaActual.reduce((acc, item) => acc + item.total, 0)}
+<h3>
+  Total: ${ventaActual.reduce((acc, item) => acc + Number(item.total || 0), 0).toLocaleString()}
 </h3>
 
-      <button 
+<button 
   onClick={async () => {
+
+    // ✅ VALIDACIONES
+    if (!clienteVenta) {
+      alert("Ingresa el nombre del cliente");
+      return;
+    }
+
     if (ventaActual.length === 0) {
       alert("No hay productos en la venta");
       return;
@@ -837,40 +903,71 @@ onClick={() => {
 
     const doc = new jsPDF();
 
-    doc.text("ACCESSPHONE", 10, 10);
-    doc.text(`Cliente: ${clienteVenta}`, 10, 20);
-    doc.text(`Documento: ${documentoVenta}`, 10, 30);
+    // 🧾 ENCABEZADO
+    doc.setFontSize(16);
+    doc.text("ACCESSPHONE", 105, 10, { align: "center" });
+    doc.setFontSize(10);
+    doc.text(`Fecha: ${new Date().toLocaleString()}`, 105, 18, { align: "center" });
+    doc.text(`Cliente: ${clienteVenta}`, 105, 24, { align: "center" });
+    doc.text(`Documento: ${documentoVenta}`, 105, 30, { align: "center" });
 
+    // 📦 TABLA
     autoTable(doc, {
-      startY: 40,
+      startY: 50,
       head: [['Producto', 'Cantidad', 'Precio', 'Total']],
       body: ventaActual.map(item => [
         item.nombre,
         item.cantidad,
-        "$" + item.precio,
-        "$" + item.total
+        "$" + Number(item.precio).toLocaleString(),
+        "$" + Number(item.total).toLocaleString()
       ])
     });
 
+    // 💰 TOTAL
     const totalFinal = ventaActual.reduce((acc, item) => acc + item.total, 0);
 
-    doc.text(`TOTAL: $${totalFinal}`, 10, doc.lastAutoTable.finalY + 10);
+    doc.text(
+      `TOTAL: $${totalFinal.toLocaleString()}`,
+      10,
+      doc.lastAutoTable.finalY + 10
+    );
 
+    // 💾 GUARDAR PDF
     doc.save(`Factura_${new Date().getTime()}.pdf`);
 
-    await descontarStock();
+    // 🔥 DESCONTAR STOCK SOLO SI TIENE ID
+    for (let item of ventaActual) {
+      if (!item.id) continue;
 
+      await fetch(`http://localhost:3000/api/productos/${item.id}/salida`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${auth.token}`
+        },
+        body: JSON.stringify({ cantidad: item.cantidad })
+      });
+    }
+
+    // 🔄 RECARGAR INVENTARIO
+    cargarProductos();
+
+    // 🧹 LIMPIAR TODO
     setVentaActual([]);
     setClienteVenta("");
     setDocumentoVenta("");
     setCantidadVenta("");
+    setProductoVenta(null);
+    setProductoManual("");
+    setPrecioManual("");
 
-    alert("✅ Venta registrada correctamente");
+    alert("✅ Venta registrada y factura generada");
+
   }}
   style={{ ...botonGuardarStyle, marginTop: '10px' }}
 >
   GENERAR FACTURA
-  </button>
+</button>
 
     </div>
 
