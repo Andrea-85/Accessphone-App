@@ -19,8 +19,20 @@ export const obtenerProductos = async (req: Request, res: Response) => {
 
 export const crearProducto = async (req: Request, res: Response) => {
     try {
-        // 1. Recibimos todos los datos que vienen del formulario
-        const { nombre, precio, stock, categoriaId, subcategoriaId } = req.body;
+        const { nombre, precio, stock, categoriaId, subcategoriaId, imei } = req.body;
+
+        // ✅ Subcategoria con mayúscula
+        let subcatId: number | null = null;
+        if (subcategoriaId && subcategoriaId !== '' && subcategoriaId !== '0') {
+            const subcatExiste = await prisma.Subcategoria.findUnique({
+                where: { id: Number(subcategoriaId) }
+            });
+            if (subcatExiste) {
+                subcatId = Number(subcategoriaId);
+            } else {
+                console.warn(`Subcategoría ${subcategoriaId} no existe, se ignora`);
+            }
+        }
 
         const nuevo = await prisma.productos.create({
             data: { 
@@ -28,10 +40,9 @@ export const crearProducto = async (req: Request, res: Response) => {
                 precio: Number(precio), 
                 costo: Number(precio) * 0.7, 
                 stock: Number(stock), 
-                // 2. Usamos el ID de categoría que seleccionaste
                 categoriaId: Number(categoriaId),
-                // 3. Guardamos la subcategoría (si existe)
-                subcategoriaId: subcategoriaId ? Number(subcategoriaId) : null
+                subcategoriaId: subcatId,
+                imei: imei || null
             }
         });
         res.status(201).json(nuevo);
@@ -44,23 +55,35 @@ export const crearProducto = async (req: Request, res: Response) => {
 export const actualizarProducto = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { nombre, precio, stock, categoriaId, subcategoriaId } = req.body; 
+        const { nombre, precio, stock, categoriaId, subcategoriaId, imei } = req.body;
+
+        // ✅ Subcategoria con mayúscula
+        let subcatId: number | null = null;
+        if (subcategoriaId && subcategoriaId !== '' && subcategoriaId !== '0') {
+            const subcatExiste = await prisma.Subcategoria.findUnique({
+                where: { id: Number(subcategoriaId) }
+            });
+            if (subcatExiste) {
+                subcatId = Number(subcategoriaId);
+            }
+        }
 
         const actualizado = await prisma.productos.update({
             where: { id: Number(id) },
             data: {
-                nombre: nombre,
+                nombre,
                 precio: Number(precio),
+                costo: Number(precio) * 0.7,
                 stock: Number(stock),
                 categoriaId: Number(categoriaId),
-                // Agregamos la subcategoría aquí también
-                subcategoriaId: subcategoriaId ? Number(subcategoriaId) : null
+                subcategoriaId: subcatId,
+                imei: imei || null
             }
         });
         res.json(actualizado);
     } catch (error: any) {
         console.error("ERROR AL ACTUALIZAR:", error.message);
-        res.status(400).json({ error: "Error al actualizar producto" });
+        res.status(400).json({ error: "Error al actualizar: " + error.message });
     }
 };
 

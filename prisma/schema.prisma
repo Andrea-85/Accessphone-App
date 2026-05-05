@@ -14,11 +14,11 @@ model productos {
   costo              Decimal
   stock              Int
   estado             String?          @db.VarChar(20)
-  imei               String?          @unique @db.VarChar(20)
   descripcion_estado String?
   categoriaId        Int?
   imagen             String?
   subcategoriaId     Int?
+  imei               String?
   detalles           detalles_venta[]
   categoria          categorias?      @relation(fields: [categoriaId], references: [id])
   subcategoria       Subcategoria?    @relation(fields: [subcategoriaId], references: [id])

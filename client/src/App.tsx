@@ -15,7 +15,7 @@ function App() {
   const [datosAuth, setDatosAuth] = useState({ email: '', password: '', nombre: '' });
   const [esRegistro, setEsRegistro] = useState(false);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
-  const [nuevoProducto, setNuevoProducto] = useState({ modelo: '', precio: '', stock: '', categoriaId: '' });
+  const [nuevoProducto, setNuevoProducto] = useState({ modelo: '', precio: '', stock: '', categoriaId: '', imei: '' });
   const [listaProductos, setListaProductos] = useState([]);
   const [filtroCategoria, setFiltroCategoria] = useState('todos');
   const [editando, setEditando] = useState(false);
@@ -35,6 +35,7 @@ function App() {
   const [modoVenta, setModoVenta] = useState("inventario"); 
   const [productoManual, setProductoManual] = useState("");
   const [precioManual, setPrecioManual] = useState("");
+  const [imeiEquipo, setImeiEquipo] = useState("");
   const usuario = JSON.parse(localStorage.getItem("usuario"));
   const cambiarPantalla = (nuevaPantalla) => {
   setHistorialPantallas(prev => [...prev, pantalla]);
@@ -129,18 +130,32 @@ const volverAtras = () => {
     }
 };
 
-  const guardarEnBD = async () => {
+const guardarEnBD = async () => {
+    const categoriaSeleccionada = listaCategorias.find(c => String(c.id) === String(nuevoProducto.categoriaId));
+    const esEquipoMovil = categoriaSeleccionada?.nombre.toUpperCase().includes('CELULAR') || 
+                          categoriaSeleccionada?.nombre.toUpperCase().includes('IPHONE') ||
+                          categoriaSeleccionada?.nombre.toUpperCase().includes('SAMSUNG') ||
+                          categoriaSeleccionada?.nombre.toUpperCase().includes('SMARTPHONE');
+
     const datosParaEnviar = {
       nombre: nuevoProducto.modelo, 
       precio: Number(nuevoProducto.precio),
       stock: Number(nuevoProducto.stock),
       categoriaId: Number(nuevoProducto.categoriaId),
-      subcategoriaId: nuevoProducto.subcategoriaId ? Number(nuevoProducto.subcategoriaId) : null
+      // ✅ CAMBIO: Solo incluir si tiene valor válido
+      subcategoriaId: nuevoProducto.subcategoriaId && nuevoProducto.subcategoriaId !== '' ? Number(nuevoProducto.subcategoriaId) : undefined
     };
+
+    // ✅ Solo agregar IMEI si es equipo móvil
+    if (esEquipoMovil && nuevoProducto.imei) {
+      datosParaEnviar.imei = nuevoProducto.imei;
+    }
+
     if (!datosParaEnviar.nombre || !datosParaEnviar.categoriaId) {
-    alert("Por favor completa el modelo y la categoría");
-    return;
-  }
+      alert("Por favor completa el modelo y la categoría");
+      return;
+    }
+    
     try {
       const URL = editando ? `http://localhost:3000/api/productos/${idProductoAEditar}` : 'http://localhost:3000/api/productos';
       const respuesta = await fetch(URL, { 
@@ -155,13 +170,13 @@ const volverAtras = () => {
         alert("¡Guardado con éxito!");
       } else {
         const errorData = await respuesta.json();
-      console.log("DATOS ENVIADOS:", datosParaEnviar);
+        console.log("DATOS ENVIADOS:", datosParaEnviar);
         console.log("ERROR DEL SERVIDOR:", errorData);
-      alert("El servidor rechazó los datos. Revisa la consola.");
-    }
+        alert("El servidor rechazó los datos. Revisa la consola.");
+      }
     } catch (e) { 
-    alert("Error de conexión con el servidor"); 
-  }
+      alert("Error de conexión con el servidor"); 
+    }
 };
 
   const eliminarDeBD = async (id: number) => {
@@ -357,7 +372,7 @@ const volverAtras = () => {
       style={{ background: 'transparent', border: 'none', color: 'white', outline: 'none', width: '100%' }}
     />
   </div>
-                  <button onClick={() => { setEditando(false); setNuevoProducto({modelo:'', precio:'', stock:'', categoriaId:''}); setMostrarFormulario(true); }} style={botonGuardarStyle}>+ AGREGAR</button>
+                  <button onClick={() => { setEditando(false); setNuevoProducto({modelo:'', precio:'', stock:'', categoriaId:'', imei: ''}); setMostrarFormulario(true); }} style={botonGuardarStyle}>+ AGREGAR</button>
                 </div>
                 
                 {mostrarFormulario ? (
@@ -366,6 +381,28 @@ const volverAtras = () => {
     <input type="number" placeholder="Precio" style={inputStyle} value={nuevoProducto.precio} onChange={(e) => setNuevoProducto({...nuevoProducto, precio: e.target.value})} />
     <input type="number" placeholder="Stock" style={inputStyle} value={nuevoProducto.stock} onChange={(e) => setNuevoProducto({...nuevoProducto, stock: e.target.value})} />
     
+      {/* ✅ NUEVO: Campo IMEI solo para categoría "Celulares" */}
+    {(() => {
+      const categoriaSeleccionada = listaCategorias.find(c => String(c.id) === String(nuevoProducto.categoriaId));
+      const esCelulares = categoriaSeleccionada?.nombre.toUpperCase().includes('CELULAR') || 
+                          categoriaSeleccionada?.nombre.toUpperCase().includes('IPHONE') ||
+                          categoriaSeleccionada?.nombre.toUpperCase().includes('SAMSUNG');
+      
+      if (esCelulares) {
+        return (
+          <input 
+            type="text" 
+            placeholder="IMEI del equipo (15 dígitos) - Opcional" 
+            style={inputStyle} 
+            value={nuevoProducto.imei} 
+            onChange={(e) => setNuevoProducto({...nuevoProducto, imei: e.target.value})}
+            maxLength="15"
+          />
+        );
+      }
+      return null;
+    })()}
+
     {/* SELECTOR DE CATEGORÍA */}
     <select 
       style={inputStyle} 
@@ -401,7 +438,7 @@ const volverAtras = () => {
         <select 
           style={{...inputStyle, border: `1px solid ${colores.neonAzul}`, marginTop: '5px'}} 
           value={nuevoProducto.subcategoriaId || ""}
-          onChange={(e) => setNuevoProducto({...nuevoProducto, subcategoriaId: e.target.value === 'nueva' ? 'nueva' : Number(e.target.value)})}
+         onChange={(e) => setNuevoProducto({...nuevoProducto, subcategoriaId: e.target.value === 'nueva' ? 'nueva' : Number(e.target.value)})}
         >
           <option value="">-- Seleccione --</option>
           {nombreCat === 'VIDRIOS' ? (
@@ -462,21 +499,20 @@ const volverAtras = () => {
 </thead>
 <tbody>
   {/* Esta es la parte que decide qué productos se muestran */}
-  {listaProductos.filter((p: any) => {
-    if (filtroCategoria === 'todos') return true;
-    
-    // Buscamos si el ID del producto coincide con el filtro de la pestaña
-    const coincideId = String(p.categoriaId) === String(filtroCategoria);
-    
-    // También buscamos por nombre por si la pestaña usa el nombre "Vidrios"
-    const categoria = listaCategorias.find(c => String(c.id) === String(p.categoriaId));
-    const coincideNombre = categoria?.nombre === filtroCategoria;
-
-    return coincideId || coincideNombre;
-  }).map((p: any) => (
+{listaProductos.filter((p: any) => {
+  // ✅ Filtro por categoría
+  const pasaCategoria = filtroCategoria === 'todos' || 
+    String(p.categoriaId) === String(filtroCategoria);
+  
+  // ✅ Filtro por búsqueda
+  const pasaBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase());
+  
+  // ✅ Retorna si pasa AMBOS filtros
+  return pasaCategoria && pasaBusqueda;
+}).map((p: any) => (
     <tr key={p.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
       {/* Mostramos el nombre y, si es vidrio, su tipo al lado */}
-      <td>
+   <td>
   {p.nombre}
   {p.subcategoriaId && (
     <span style={{ fontSize: '11px', color: '#00ff88', marginLeft: '10px', fontStyle: 'italic' }}>
@@ -485,7 +521,7 @@ const volverAtras = () => {
        p.subcategoriaId === 3 ? '(Blindado)' : 
        p.subcategoriaId === 4 ? '(Mate)' : 
        p.subcategoriaId === 5 ? '(Silicona)' : 
-       p.subcategoriaId === 6 ? '(Diseño)' : 
+       p.subcategoriaId === 6 ? '(Con Diseño)' : 
        p.subcategoriaId === 7 ? '(Space)' : 
        p.subcategoriaId === 8 ? '(Unicolor)' : 
        ''}
@@ -674,6 +710,17 @@ const volverAtras = () => {
     onChange={(e) => setDocumentoVenta(e.target.value)}
     style={inputStyle}
 />
+ {/* ✅ NUEVO: Campo IMEI solo si es inventario (celular) */}
+  {modoVenta === "inventario" && (
+    <input 
+      type="text" 
+      placeholder="IMEI del equipo (15 dígitos)"
+      value={imeiEquipo}
+      onChange={(e) => setImeiEquipo(e.target.value)}
+      maxLength="15"
+      style={inputStyle}
+    />
+  )}
 
   {modoVenta === "inventario" ? (
   <>
@@ -745,12 +792,13 @@ onClick={() => {
     }
 
     nuevaVenta = {
-      id: productoVenta.id,
-      nombre: productoVenta.nombre,
-      cantidad,
-      precio: productoVenta.precio,
-      total: productoVenta.precio * cantidad
-    };
+  id: productoVenta.id,
+  nombre: productoVenta.nombre,
+  cantidad,
+  precio: productoVenta.precio,
+  total: productoVenta.precio * cantidad,
+  imei: imeiEquipo // ✅ NUEVO: Agregar IMEI
+};
 
   } else {
     if (!productoManual || !precioManual) {
@@ -787,6 +835,7 @@ onClick={() => {
         <thead>
           <tr style={{ borderBottom: `2px solid ${colores.neonAzul}` }}>
           <th style={{ textAlign: 'left' }}>Producto</th>
+           <th>IMEI</th> 
           <th>Cantidad</th>
           <th>Precio</th>
           <th>Total</th>
@@ -806,6 +855,13 @@ ventaActual.map((item, index) => (
   <tr key={index} style={{ textAlign: 'center' }}>
 
     <td style={{ textAlign: 'left' }}>{item.nombre}</td>
+     <td style={{ textAlign: 'left' }}>
+      {item.imei ? (
+        <span style={{ color: '#00ff88', fontSize: '0.9rem' }}>📱 {item.imei}</span>
+      ) : (
+        <span style={{ color: '#888' }}>-</span>
+      )}
+    </td>
 
     <td>
       <span 
@@ -913,15 +969,16 @@ ventaActual.map((item, index) => (
 
     // 📦 TABLA
     autoTable(doc, {
-      startY: 50,
-      head: [['Producto', 'Cantidad', 'Precio', 'Total']],
-      body: ventaActual.map(item => [
-        item.nombre,
-        item.cantidad,
-        "$" + Number(item.precio).toLocaleString(),
-        "$" + Number(item.total).toLocaleString()
-      ])
-    });
+  startY: 50,
+  head: [['Producto', 'IMEI', 'Cantidad', 'Precio', 'Total']],
+  body: ventaActual.map(item => [
+    item.nombre,
+    item.imei || '-',  // ✅ NUEVO: Mostrar IMEI
+    item.cantidad,
+    "$" + Number(item.precio).toLocaleString(),
+    "$" + Number(item.total).toLocaleString()
+  ])
+});
 
     // 💰 TOTAL
     const totalFinal = ventaActual.reduce((acc, item) => acc + item.total, 0);
@@ -960,6 +1017,7 @@ ventaActual.map((item, index) => (
     setProductoVenta(null);
     setProductoManual("");
     setPrecioManual("");
+    setImeiEquipo(""); 
 
     alert("✅ Venta registrada y factura generada");
 
