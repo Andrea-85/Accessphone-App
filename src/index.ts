@@ -40,6 +40,47 @@ const poblarCategorias = async () => {
     console.log("--- CATEGORÍAS INICIALES CREADAS ---");
   }
 };
+// ✅ REPORTES DE NOVEDAD
+app.post('/api/reportes', async (req: Request, res: Response) => {
+  try {
+    const { empleado, producto, tipo, descripcion, foto_url } = req.body;
+
+    if (!empleado || !producto) {
+      return res.status(400).json({ error: "Faltan datos" });
+    }
+
+    const nuevoReporte = await prisma.reportes_novedad.create({
+      data: {
+        empleado,
+        producto,
+        tipo,
+        descripcion,
+        foto_url: foto_url || null
+      }
+    });
+
+    res.status(201).json(nuevoReporte);
+  } catch (error: any) {
+    console.error("ERROR AL CREAR REPORTE:", error.message);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.get('/api/reportes', async (req: Request, res: Response) => {
+  try {
+    const reportes = await prisma.reportes_novedad.findMany({
+      orderBy: { fecha: 'desc' }
+    });
+    res.json(reportes);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Asegúrate que esto esté al FINAL
+app.listen(3000, () => {
+  console.log("✅ Servidor escuchando en puerto 3000");
+});
 
 // Ejecutar al iniciar
 poblarCategorias();

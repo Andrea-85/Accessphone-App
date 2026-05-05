@@ -75,3 +75,14 @@ model usuarios {
   password String
   rol      String @default("vendedor")
 }
+
+model reportes_novedad {
+  id            Int       @id @default(autoincrement())
+  empleado      String    @db.VarChar(100)
+  producto      String    @db.VarChar(100)
+  tipo          String    @db.VarChar(50)  // fabrica, transportadora, local, bateria
+  descripcion   String    @db.Text
+  foto_url      String?   @db.VarChar(500)
+  fecha         DateTime  @default(now())
+  estado        String    @default("pendiente") @db.VarChar(20) // pendiente, resuelto
+}

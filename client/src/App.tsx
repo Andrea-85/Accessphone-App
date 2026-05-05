@@ -1077,29 +1077,116 @@ ventaActual.map((item, index) => (
           <input type="file" accept="image/*" id="fotoNovedad" style={{ color: '#888' }} />
         </div>
       </div>
+      
+      {/* TABLA DE HISTORIAL DE REPORTES */}
+<div style={{ marginTop: '40px' }}>
+  <h4>📋 Historial de Reportes</h4>
+  <input 
+    type="text" 
+    placeholder="🔍 Buscar por producto..." 
+    id="buscarReporte"
+    style={inputStyle}
+    onChange={async (e) => {
+      if (e.target.value.length > 0) {
+        const res = await fetch(`http://localhost:3000/api/reportes/buscar/${e.target.value}`, {
+          headers: { 'Authorization': `Bearer ${auth.token}` }
+        });
+        const datos = await res.json();
+        // Mostrar en tabla
+      }
+    }}
+  />
+  
+  <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '15px' }}>
+    <thead>
+      <tr style={{ borderBottom: `2px solid #00d1ff` }}>
+        <th style={{ textAlign: 'left' }}>Fecha</th>
+        <th style={{ textAlign: 'left' }}>Producto</th>
+        <th style={{ textAlign: 'left' }}>Empleado</th>
+        <th>Tipo</th>
+        <th>Estado</th>
+        <th>Foto</th>
+      </tr>
+    </thead>
+    <tbody>
+      {/* Aquí irán los reportes */}
+    </tbody>
+  </table>
+</div>
 
       {/* BOTÓN PARA GENERAR LA NOVEDAD */}
       <button 
-        onClick={() => {
-          const empleado = (document.getElementById('nombreEmpleado') as HTMLInputElement).value;
-          const producto = (document.getElementById('productoNovedad') as HTMLInputElement).value;
-          
-          if(!empleado || !producto) {
-            alert("Por favor pon tu nombre y el producto para poder guardar.");
-            return;
-          }
+  onClick={async () => {
+    const empleado = (document.getElementById('nombreEmpleado') as HTMLInputElement).value;
+    const producto = (document.getElementById('productoNovedad') as HTMLInputElement).value;
+    const tipo = (document.getElementById('tipoNovedad') as HTMLSelectElement).value;
+    const descripcion = (document.getElementById('descripcionNovedad') as HTMLTextAreaElement).value;
+    const fotoInput = document.getElementById('fotoNovedad') as HTMLInputElement;
 
-          alert(`✅ Reporte de ${producto} generado con éxito por ${empleado}. Claudia podrá conectar esto a la base de datos ahora.`);
-          // Aquí Claudia podrá hacer el fetch para guardar la foto y los datos en la BD
-        }}
-        style={{ 
-          marginTop: '20px', width: '100%', padding: '15px', 
-          background: '#00ff88', color: '#000', fontWeight: 'bold', 
-          border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem' 
-        }}
-      >
-        GUARDAR REPORTE EN EL SISTEMA
-      </button>
+    if (!empleado || !producto) {
+      alert("Por favor pon tu nombre y el producto");
+      return;
+    }
+
+    // 📸 Si hay foto, subirla a Supabase
+    let foto_url = null;
+    if (fotoInput.files && fotoInput.files[0]) {
+      const file = fotoInput.files[0];
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const respuestaFoto = await fetch('http://localhost:3000/api/upload', {
+          method: 'POST',
+          body: formData,
+          headers: { 'Authorization': `Bearer ${auth.token}` }
+        });
+        const dataFoto = await respuestaFoto.json();
+        foto_url = dataFoto.url;
+      } catch (e) {
+        console.error("Error subiendo foto:", e);
+      }
+    }
+
+    // 📝 Guardar reporte en BD
+    try {
+      const respuesta = await fetch('http://localhost:3000/api/reportes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${auth.token}`
+        },
+        body: JSON.stringify({
+          empleado,
+          producto,
+          tipo,
+          descripcion,
+          foto_url
+        })
+      });
+
+      if (respuesta.ok) {
+        alert("✅ Reporte guardado exitosamente en el sistema");
+        // Limpiar campos
+        (document.getElementById('nombreEmpleado') as HTMLInputElement).value = '';
+        (document.getElementById('productoNovedad') as HTMLInputElement).value = '';
+        (document.getElementById('descripcionNovedad') as HTMLTextAreaElement).value = '';
+        fotoInput.value = '';
+      } else {
+        alert("❌ Error al guardar");
+      }
+    } catch (e) {
+      alert("Error de conexión");
+    }
+  }}
+  style={{ 
+    marginTop: '20px', width: '100%', padding: '15px', 
+    background: '#00ff88', color: '#000', fontWeight: 'bold', 
+    border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem' 
+  }}
+>
+  GUARDAR REPORTE EN EL SISTEMA
+</button>
     </div>
 
     {/* TABLA DE HISTORIAL (Debajo del formulario) */}
