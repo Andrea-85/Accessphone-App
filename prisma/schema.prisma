@@ -7,82 +7,277 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model productos {
-  id                 Int              @id @default(autoincrement())
-  nombre             String           @db.VarChar(100)
-  precio             Decimal          @db.Decimal(12, 2)
-  costo              Decimal
-  stock              Int
-  estado             String?          @db.VarChar(20)
-  descripcion_estado String?
-  categoriaId        Int?
-  imagen             String?
-  subcategoriaId     Int?
-  imei               String?
-  detalles           detalles_venta[]
-  categoria          categorias?      @relation(fields: [categoriaId], references: [id])
-  subcategoria       Subcategoria?    @relation(fields: [subcategoriaId], references: [id])
+enum SubscriptionStatus {
+  ACTIVE
+  SUSPENDED
+  GRACE_PERIOD
 }
 
-model categorias {
-  id            Int            @id @default(autoincrement())
-  nombre        String         @unique @db.VarChar(50)
-  subcategorias Subcategoria[]
-  productos     productos[]
+enum BillingCycle {
+  MONTHLY
+  ANNUALLY
+}
+
+enum BalanceMutationType {
+  CREDIT /// Saldo aumenta (pago del cliente)
+  DEBIT /// Saldo disminuye (ej. cobro recurrente del software)
+}
+
+enum Rol {
+  ADMIN
+  VENDEDOR
+  BODEGUERO
+}
+
+model Organization {
+  id        Int      @id @default(autoincrement())
+  nombre    String   @db.VarChar(120)
+  slug      String?  @unique @db.VarChar(80)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Saldo prepagado disponible para la cuenta (uso interno SaaS).
+  balance             Decimal            @default(0) @db.Decimal(14, 2)
+  subscriptionStatus  SubscriptionStatus @default(ACTIVE)
+  subscriptionExpires DateTime?
+  automaticLock       Boolean            @default(true)
+  graceDays           Int                @default(3)
+  billingCycle        BillingCycle       @default(MONTHLY)
+  /// Proveedor externo de pago (ej. método Stripe) cuando integres facturación.
+  paymentMethodId     String?            @db.VarChar(191)
+
+  usuarios     Usuarios[]
+  clientes     Clientes[]
+  categorias   Categorias[]
+  productos    Productos[]
+  ventas       Ventas[]
+  warehouses   Warehouse[]
+  transactions Transaction[]
+}
+
+/// Movimientos de saldo SaaS por organización (pagos entrantes vs cargos recurrentes).
+model Transaction {
+  id             Int                 @id @default(autoincrement())
+  organizationId Int
+  type           BalanceMutationType
+  /// Monto siempre positivo; el efecto sobre el balance lo indica `type`.
+  amount         Decimal             @db.Decimal(14, 2)
+  description    String?             @db.VarChar(500)
+  externalRef    String?             @db.VarChar(191)
+  balanceAfter   Decimal?            @db.Decimal(14, 2)
+  createdAt      DateTime            @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, createdAt])
+  @@map("transactions")
+}
+
+model Warehouse {
+  id             Int      @id @default(autoincrement())
+  organizationId Int
+  nombre         String   @db.VarChar(100)
+  direccion      String?  @db.VarChar(255)
+  activo         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stocks       WarehouseStock[]
+
+  @@unique([organizationId, nombre])
+  @@index([organizationId])
+}
+
+model WarehouseStock {
+  id          Int @id @default(autoincrement())
+  warehouseId Int
+  varianteId  Int
+  cantidad    Int @default(0)
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  productos Productos @relation(fields: [varianteId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, varianteId])
+  @@index([varianteId])
+}
+
+enum MetodoPago {
+  EFECTIVO
+  TRANSFERENCIA
+  TARJETA
+  CREDITO
+  OTRO
+}
+
+model Payment {
+  id         Int        @id @default(autoincrement())
+  ventaId    Int
+  monto      Decimal    @db.Decimal(12, 2)
+  metodo     MetodoPago
+  referencia String?    @db.VarChar(255)
+  fecha      DateTime   @default(now())
+
+  venta Ventas @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+
+  @@index([ventaId])
+}
+
+model Productos {
+  id                    Int                     @id @default(autoincrement())
+  organizationId        Int
+  nombre                String                  @db.VarChar(100)
+  precio                Decimal                 @db.Decimal(12, 2)
+  costo                 Decimal
+  estado                String?                 @db.VarChar(20)
+  descripcion_estado    String?
+  categoriaId           Int?
+  imagen                String?
+  subcategoriaId        Int?
+  imei                  String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  movimientosInventario MovimientosInventario[]
+  variantes             Variante[]
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  categoria       Categorias?      @relation(fields: [categoriaId], references: [id])
+  subcategoria    Subcategoria?    @relation(fields: [subcategoriaId], references: [id])
+  detalles        Detalles_venta[]
+  warehouseStocks WarehouseStock[]
+
+  @@index([organizationId])
+  @@index([organizationId, categoriaId])
+}
+
+model Variante {
+  id             Int              @id @default(autoincrement())
+  productoId     Int // Relación con el producto padre
+  sku            String           @unique // Ejemplo: "IPH13-PANT-ORG"
+  nombreVariante String // Ejemplo: "Original" o "1 Metro"
+  precio         Decimal          @db.Decimal(12, 2)
+  stockActual    Int              @default(0)
+  detalles       Detalles_venta[]
+
+  producto Productos @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@index([productoId])
+}
+
+model Categorias {
+  id             Int            @id @default(autoincrement())
+  organizationId Int
+  nombre         String         @db.VarChar(50)
+  subcategorias  Subcategoria[]
+  productos      Productos[]
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, nombre])
+  @@index([organizationId])
 }
 
 model Subcategoria {
   id          Int         @id @default(autoincrement())
-  nombre      String
   categoriaId Int
-  categoria   categorias  @relation(fields: [categoriaId], references: [id])
-  productos   productos[]
+  nombre      String      @db.VarChar(80)
+  categoria   Categorias  @relation(fields: [categoriaId], references: [id], onDelete: Cascade)
+  productos   Productos[]
+
+  @@unique([categoriaId, nombre])
+  @@index([categoriaId])
 }
 
-model clientes {
-  id        Int      @id @default(autoincrement())
-  nombre    String   @db.VarChar(100)
-  telefono  String?  @db.VarChar(20)
-  email     String?  @unique @db.VarChar(100)
-  direccion String?
-  cedula    String   @unique @db.VarChar(20)
-  ventas    ventas[]
+model Clientes {
+  id             Int      @id @default(autoincrement())
+  organizationId Int
+  nombre         String   @db.VarChar(100)
+  telefono       String?  @db.VarChar(20)
+  email          String?  @db.VarChar(100)
+  direccion      String?
+  cedula         String   @db.VarChar(20)
+  ventas         Ventas[]
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, cedula])
+  @@unique([organizationId, email])
+  @@index([organizationId])
 }
 
-model ventas {
-  id        Int              @id @default(autoincrement())
-  fecha     DateTime         @default(now())
-  clienteId Int
-  total     Decimal          @db.Decimal(12, 2)
-  detalles  detalles_venta[]
-  cliente   clientes         @relation(fields: [clienteId], references: [id])
+model Ventas {
+  id             Int      @id @default(autoincrement())
+  organizationId Int
+  fecha          DateTime @default(now())
+  clienteId      Int
+  total          Decimal  @db.Decimal(12, 2)
+  estado         String   @default("PENDIENTE")
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cliente      Clientes         @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  detalles     Detalles_venta[]
+  payments     Payment[]
+
+  @@index([organizationId])
+  @@index([organizationId, fecha])
 }
 
-model detalles_venta {
-  id              Int       @id @default(autoincrement())
+model Detalles_venta {
+  id              Int     @id @default(autoincrement())
   ventaId         Int
-  productoId      Int
+  varianteId      Int // <--- CAMBIO AQUÍ: Ya no es productoId
   cantidad        Int
-  precio_unitario Decimal   @db.Decimal(12, 2)
-  producto        productos @relation(fields: [productoId], references: [id])
-  venta           ventas    @relation(fields: [ventaId], references: [id])
+  productoId      Int
+  precio_unitario Decimal @db.Decimal(12, 2)
+
+  // Relación con el nuevo modelo Variante (que debes crear)
+  variante Variante  @relation(fields: [varianteId], references: [id], onDelete: Restrict)
+  venta    Ventas    @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  producto Productos @relation(fields: [productoId], references: [id])
+
+  @@index([ventaId])
+  @@index([varianteId]) // <--- CAMBIO AQUÍ: El índice ahora es por variante
 }
 
-model usuarios {
-  id       Int    @id @default(autoincrement())
-  nombre   String
-  email    String @unique
-  password String
-  rol      String @default("vendedor")
+model Usuarios {
+  id                    Int                     @id @default(autoincrement())
+  organizationId        Int
+  nombre                String
+  email                 String
+  password              String
+  rol                   Rol                     @default(VENDEDOR)
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  movimientosInventario MovimientosInventario[]
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
 }
 
-model reportes_novedad {
-  id            Int       @id @default(autoincrement())
-  empleado      String    @db.VarChar(100)
-  producto      String    @db.VarChar(100)
-  tipo          String    @db.VarChar(50)  // fabrica, transportadora, local, bateria
-  descripcion   String    @db.Text
-  foto_url      String?   @db.VarChar(500)
-  fecha         DateTime  @default(now())
-  estado        String    @default("pendiente") @db.VarChar(20) // pendiente, resuelto
+model Reportes_novedad {
+  id          Int      @id @default(autoincrement())
+  empleado    String   @db.VarChar(100)
+  producto    String   @db.VarChar(100)
+  tipo        String   @db.VarChar(50) // fabrica, transportadora, local, bateria
+  descripcion String   @db.Text
+  foto_url    String?  @db.VarChar(500)
+  fecha       DateTime @default(now())
+  estado      String   @default("pendiente") @db.VarChar(20) // pendiente, resuelto
+}
+
+model MovimientosInventario {
+  id             Int       @id @default(autoincrement())
+  tipoMovimiento String // "ENTRADA", "SALIDA", "AJUSTE"
+  cantidad       Int
+  fecha          DateTime  @default(now())
+  varianteId     Int
+  usuarioId      Int // ID del bodeguero o vendedor que hizo el movimiento
+  productos      Productos @relation(fields: [varianteId], references: [id])
+  usuario        Usuarios  @relation(fields: [usuarioId], references: [id])
+
+  @@index([varianteId])
+  @@index([usuarioId])
 }

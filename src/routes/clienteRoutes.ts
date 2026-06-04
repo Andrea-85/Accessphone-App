@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { obtenerClientes, crearCliente } from '../controllers/clienteController.js';
+import { obtenerClientes, crearCliente } from '../controllers/clienteController';
 
 const router = Router();
 

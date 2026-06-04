@@ -1,92 +1,71 @@
+console.log("Servidor cargando...");
 import 'dotenv/config';
-import express from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
-import productoRoutes from './routes/productoRoutes.js';
-import clienteRoutes from './routes/clienteRoutes.js';
-import ventaRoutes from './routes/ventaRoutes.js';
-import authRoutes from './routes/authRoutes.js';
-import categoriaRoutes from './routes/categoriaRoutes.js';
-import { errorHandler } from './middlewares/errorMiddleware.js';
+import productoRoutes from './routes/productoRoutes';
+import clienteRoutes from './routes/clienteRoutes';
+import ventaRoutes from './routes/ventaRoutes';
+import authRoutes from './routes/authRoutes';
+import categoriaRoutes from './routes/categoriaRoutes';
+import reportesRoutes from './routes/reportesRoutes'; 
+import { errorHandler } from './middlewares/errorMiddleware';
+import { organizationMiddleware } from './middlewares/organizationMiddleware';
 import { PrismaClient } from '@prisma/client';
+import inventarioRoutes from './routes/inventarioRoutes';
+
 const prisma = new PrismaClient();
-
-
 const app = express();
 const PORT = 3000;
 
 app.use(cors());
 app.use(express.json());
 
-// RUTAS ORGANIZADAS
+// 1. RUTAS PÚBLICAS (No necesitan seguridad)
+app.use('/api/auth', authRoutes);
+
+// 2. APLICAR SEGURIDAD A TODO LO DEMÁS
+app.use(organizationMiddleware);
+app.listen(3000, () => {
+    console.log("¡SERVICIO ESCUCHANDO EN PUERTO 3000!");
+});
+
+// 3. RUTAS PROTEGIDAS (Ya pasan por la validación de organización)
 app.use('/api/productos', productoRoutes);
+app.use('/api/inventario', inventarioRoutes);
 app.use('/api/clientes', clienteRoutes);
 app.use('/api/ventas', ventaRoutes);
-app.use('/api/auth', authRoutes);
 app.use('/api/categorias', categoriaRoutes);
+app.use('/api/reportes', reportesRoutes);
+
 app.use(errorHandler); 
 
-// Función para poblar la base de datos automáticamente
 const poblarCategorias = async () => {
+  // 1. Aseguramos que exista al menos una organización
+  let org = await prisma.organization.findFirst({ where: { id: 1 } });
+  if (!org) {
+    org = await prisma.organization.create({
+      data: { id: 1, nombre: 'Tienda Principal' }
+    });
+    console.log("--- ORGANIZACIÓN 1 CREADA ---");
+  }
+
+  // 2. Ahora sí poblamos las categorías
   const count = await prisma.categorias.count();
   if (count === 0) {
     await prisma.categorias.createMany({
       data: [
-        { nombre: 'Celulares' },
-        { nombre: 'Cargadores' },
-        { nombre: 'Audífonos' },
-        { nombre: 'Estuches' }
+        { nombre: 'Celulares', organizationId: 1 },
+        { nombre: 'Cargadores', organizationId: 1 },
+        { nombre: 'Audífonos', organizationId: 1 },
+        { nombre: 'Estuches', organizationId: 1 }
       ]
     });
     console.log("--- CATEGORÍAS INICIALES CREADAS ---");
   }
 };
-// ✅ REPORTES DE NOVEDAD
-app.post('/api/reportes', async (req: Request, res: Response) => {
-  try {
-    const { empleado, producto, tipo, descripcion, foto_url } = req.body;
 
-    if (!empleado || !producto) {
-      return res.status(400).json({ error: "Faltan datos" });
-    }
-
-    const nuevoReporte = await prisma.reportes_novedad.create({
-      data: {
-        empleado,
-        producto,
-        tipo,
-        descripcion,
-        foto_url: foto_url || null
-      }
-    });
-
-    res.status(201).json(nuevoReporte);
-  } catch (error: any) {
-    console.error("ERROR AL CREAR REPORTE:", error.message);
-    res.status(400).json({ error: error.message });
-  }
-});
-
-app.get('/api/reportes', async (req: Request, res: Response) => {
-  try {
-    const reportes = await prisma.reportes_novedad.findMany({
-      orderBy: { fecha: 'desc' }
-    });
-    res.json(reportes);
-  } catch (error: any) {
-    res.status(400).json({ error: error.message });
-  }
-});
-
-// Asegúrate que esto esté al FINAL
-app.listen(3000, () => {
-  console.log("✅ Servidor escuchando en puerto 3000");
-});
-
-// Ejecutar al iniciar
-poblarCategorias();
-
-app.listen(PORT, () => {
-    console.log(`--- SERVIDOR CORRIENDO ---`);
-    console.log(`Productos: http://localhost:${PORT}/api/productos`);
-    console.log(`Ventas:    http://localhost:${PORT}/api/ventas/reporte`);
+// Arrancar servidor UNA SOLA VEZ
+app.listen(PORT, async () => {
+  console.log(`✅ Servidor corriendo en http://localhost:${PORT}`);
+  await poblarCategorias();
 });

@@ -13,17 +13,23 @@ export const validarToken = (req: Request, res: Response, next: NextFunction) =>
 
     try {
         // 2. Verificamos si el token es real y no ha expirado
-        const verificado = jwt.verify(token, SECRET_KEY);
-        (req as any).usuario = verificado;
-        next(); // ¡Todo bien! Puedes pasar a la ruta
+        const verificado = jwt.verify(token, SECRET_KEY) as { userId: number, role: string };
+  req.user = {
+            userId: verificado.userId,
+            role: verificado.role // <--- Esto viene del JWT que generaste en el login
+        };
+        
+        next();
     } catch (error) {
         res.status(400).json({ error: "Token no válido o expirado" });
     }
 };
+
 export const esAdmin = (req: any, res: Response, next: NextFunction) => {
-    // El 'validarToken' ya puso la info del usuario en req.usuario
-    if (req.usuario && req.usuario.rol === 'admin') {
-        next(); // ¡Es admin! Siga adelante
+    // Usamos 'req.user' para que coincida con lo que guardamos arriba
+    // Y verificamos 'role' (no 'rol') para mantener consistencia
+    if (req.user && req.user.role === 'ADMIN') { 
+        next();
     } else {
         res.status(403).json({ error: "Acceso denegado. Solo para administradores." });
     }

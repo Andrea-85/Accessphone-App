@@ -1,5 +1,11 @@
+import { Router, Request, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
+
+const router = Router();
+const prisma = new PrismaClient();
+
 // POST para crear reporte
-router.post('/reportes', async (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
     const { empleado, producto, tipo, descripcion, foto_url } = req.body;
 
@@ -19,13 +25,12 @@ router.post('/reportes', async (req: Request, res: Response) => {
 
     res.status(201).json(nuevoReporte);
   } catch (error: any) {
-    console.error("ERROR AL CREAR REPORTE:", error.message);
     res.status(400).json({ error: "Error al guardar: " + error.message });
   }
 });
 
 // GET para obtener todos los reportes
-router.get('/reportes', async (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
     const reportes = await prisma.reportes_novedad.findMany({
       orderBy: { fecha: 'desc' }
@@ -37,13 +42,15 @@ router.get('/reportes', async (req: Request, res: Response) => {
 });
 
 // GET para buscar reportes por producto
-router.get('/reportes/buscar/:producto', async (req: Request, res: Response) => {
+router.get('/buscar/:producto', async (req: Request, res: Response) => {
   try {
-    const { producto } = req.params;
+    // Forzamos la conversión a string simple
+    const producto = String(req.params.producto); 
+    
     const reportes = await prisma.reportes_novedad.findMany({
       where: {
         producto: {
-          contains: producto,
+          contains: producto, // Ahora TypeScript sabe que es un string
           mode: 'insensitive'
         }
       },
@@ -54,3 +61,5 @@ router.get('/reportes/buscar/:producto', async (req: Request, res: Response) => 
     res.status(400).json({ error: error.message });
   }
 });
+
+export default router;

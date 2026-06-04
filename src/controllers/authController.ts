@@ -1,79 +1,54 @@
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 const prisma = new PrismaClient();
-const SECRET_KEY = "Accessphone_Secret_2026"; // Esta es la firma de tus llaves
+const JWT_SECRET = process.env.JWT_SECRET;
 
-export const registrarUsuario = async (data: any) => {
-    const salt = await bcrypt.genSalt(10);
-    const passwordEncriptada = await bcrypt.hash(data.password, salt);
+// Validamos que la clave secreta exista al arrancar
+if (!JWT_SECRET) {
+    throw new Error("ERROR CRÍTICO: JWT_SECRET no está definido en el archivo .env");
+}
+
+export const registrarUsuario = async (req: any) => {
+    const { nombre, email, password, rol, organizationId } = req.body;
 
     return await prisma.usuarios.create({
-        data: {
-            nombre: data.nombre,
-            email: data.email,
-            password: passwordEncriptada,
-            rol: data.rol || "vendedor"
+        data: { 
+            nombre, 
+            email, 
+            password, // Recuerda: en producción, siempre hashea el password (bcrypt)
+            rol: rol || "vendedor", 
+            organizationId: Number(organizationId) || Number(req.organizationId) 
         }
     });
 };
 
-export const loginUsuario = async (email: string, passwordPlana: string) => {
-    const emailLimpio = email.trim().toLowerCase();
-    
-    // Buscamos si el usuario ya existe
-    let usuario = await prisma.usuarios.findUnique({ 
-        where: { email: emailLimpio } 
+export const loginUsuario = async (req: any) => {
+    const { email, password, organizationId } = req.body;
+
+    const usuario = await prisma.usuarios.findFirst({
+        where: { 
+            email, 
+            organizationId: Number(organizationId) 
+        }
     });
 
-    // --- SI NO EXISTE (COMO AHORA), LO CREAMOS AL INSTANTE ---
-    if (!usuario) {
-        console.log("Creando tu usuario de nuevo...");
-        const hashedPassword = await bcrypt.hash("123456", 10);
-        usuario = await prisma.usuarios.create({
-            data: {
-                nombre: "Andrea Londoño",
-                email: emailLimpio,
-                password: hashedPassword,
-                rol: "administrador"
-            }
-        });
+    if (!usuario || usuario.password !== password) {
+        throw new Error("Credenciales inválidas o empresa no encontrada");
     }
 
-    // Comparamos la clave (123456)
-    const esCorrecta = await bcrypt.compare(passwordPlana.trim(), usuario.password);
-    if (!esCorrecta) throw new Error("Contraseña incorrecta");
-
+    // Generamos el token de manera segura
     const token = jwt.sign(
-        { id: usuario.id, rol: usuario.rol },
-        SECRET_KEY,
-        { expiresIn: '8h' }
+        { userId: usuario.id, email: usuario.email, organizationId, role: usuario.rol },
+        JWT_SECRET,
+        { expiresIn: '24h' } // Esto es correcto y seguro
     );
 
-    return { usuario, token };
-};
-
-// --- NUEVA FUNCIÓN PARA EL REGISTRO DE NUEVO USUARIO ---
-export const registrarNuevoUsuario = async (req, res) => {
-    try {
-        const { nombre, email, password } = req.body;
-        
-        // Encriptamos la clave que ella elija
-        const salt = await bcrypt.genSalt(10);
-        const passwordEncriptada = await bcrypt.hash(password, salt);
-
-        const nuevoUsuario = await prisma.usuarios.create({
-            data: {
-                nombre,
-                email: email.trim().toLowerCase(),
-                password: passwordEncriptada,
-                rol: "vendedor" // Ella entra como vendedora por defecto
-            }
-        });
-
-        res.status(201).json({ msg: "Usuario creado con éxito", usuario: nuevoUsuario });
-    } catch (error) {
-        res.status(400).json({ msg: "El correo ya está registrado o hay un error" });
-    }
+    return { 
+        token, 
+        usuario: { 
+            nombre: usuario.nombre, 
+            rol: usuario.rol 
+        } 
+    };
 };

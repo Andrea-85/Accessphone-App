@@ -8,6 +8,43 @@ import autoTable from 'jspdf-autotable';
 // Registramos los componentes de las gráficas
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
+const LS_ACCESSPHONE_ORG = 'accessphone_organizationId';
+const LS_ACCESSPHONE_WH = 'accessphone_warehouseId';
+
+function readDefaultOrgId(): number {
+  const rawLs = typeof localStorage !== 'undefined' ? localStorage.getItem(LS_ACCESSPHONE_ORG) : null;
+  const nLs = rawLs !== null ? Number(rawLs) : NaN;
+  if (Number.isFinite(nLs) && nLs > 0) return Math.floor(nLs);
+  const nEnv = Number(import.meta.env.VITE_DEFAULT_ORGANIZATION_ID);
+  if (Number.isFinite(nEnv) && nEnv > 0) return Math.floor(nEnv);
+  return 1;
+}
+
+function readDefaultWarehouseId(): number {
+  const rawLs = typeof localStorage !== 'undefined' ? localStorage.getItem(LS_ACCESSPHONE_WH) : null;
+  const nLs = rawLs !== null ? Number(rawLs) : NaN;
+  if (Number.isFinite(nLs) && nLs > 0) return Math.floor(nLs);
+  const nEnv = Number(import.meta.env.VITE_DEFAULT_WAREHOUSE_ID);
+  if (Number.isFinite(nEnv) && nEnv > 0) return Math.floor(nEnv);
+  return 1;
+}
+
+/** Total de unidades del producto: campo legacy `stock` o suma de `warehouseStocks[].cantidad`. */
+function cantidadStockProducto(producto: any): number {
+  if (!producto) return 0;
+  const direct = producto.stock;
+  if (typeof direct === 'number' && !Number.isNaN(direct)) return direct;
+  if (direct != null && direct !== '') {
+    const n = Number(direct);
+    if (!Number.isNaN(n)) return n;
+  }
+  const rows = producto.warehouseStocks;
+  if (Array.isArray(rows)) {
+    return rows.reduce((sum: number, ws: any) => sum + Number(ws?.cantidad ?? 0), 0);
+  }
+  return 0;
+}
+
 function App() {
   const [pantalla, setPantalla] = useState('inicio');
   const [historialPantallas, setHistorialPantallas] = useState([]);
@@ -15,7 +52,14 @@ function App() {
   const [datosAuth, setDatosAuth] = useState({ email: '', password: '', nombre: '' });
   const [esRegistro, setEsRegistro] = useState(false);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
-  const [nuevoProducto, setNuevoProducto] = useState({ modelo: '', precio: '', stock: '', categoriaId: '', imei: '' });
+  const [nuevoProducto, setNuevoProducto] = useState<{
+    modelo: string;
+    precio: string;
+    stock: string;
+    categoriaId: string;
+    imei: string;
+    subcategoriaId?: number | 'nueva' | null | string;
+  }>({ modelo: '', precio: '', stock: '', categoriaId: '', imei: '', subcategoriaId: null });
   const [listaProductos, setListaProductos] = useState([]);
   const [filtroCategoria, setFiltroCategoria] = useState('todos');
   const [editando, setEditando] = useState(false);
@@ -37,6 +81,11 @@ function App() {
   const [precioManual, setPrecioManual] = useState("");
   const [imeiEquipo, setImeiEquipo] = useState("");
   const usuario = JSON.parse(localStorage.getItem("usuario"));
+
+  /** Multi-tenant: misma organización y bodega para listados, alta/edición de productos y movimientos de stock. */
+  const [organizationId, setOrganizationId] = useState<number>(() => readDefaultOrgId());
+  const [warehouseId, setWarehouseId] = useState<number>(() => readDefaultWarehouseId());
+
   const cambiarPantalla = (nuevaPantalla) => {
   setHistorialPantallas(prev => [...prev, pantalla]);
   setPantalla(nuevaPantalla);
@@ -64,15 +113,27 @@ const volverAtras = () => {
   };
 
   useEffect(() => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(LS_ACCESSPHONE_ORG, String(organizationId));
+    }
+  }, [organizationId]);
+
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(LS_ACCESSPHONE_WH, String(warehouseId));
+    }
+  }, [warehouseId]);
+
+  useEffect(() => {
     if (auth.token) {
       cargarCategorias();
       cargarProductos();
     }
-  }, [auth.token, pantalla]);
+  }, [auth.token, pantalla, organizationId]);
 
   const cargarProductos = async () => {
     try {
-      const respuesta = await fetch('http://localhost:3000/api/productos', {
+      const respuesta = await fetch(`http://localhost:3000/api/productos?organizationId=${organizationId}`, {
         headers: { 'Authorization': `Bearer ${auth.token}` }
       });
       const datos = await respuesta.json();
@@ -82,7 +143,7 @@ const volverAtras = () => {
 
   const cargarCategorias = async () => {
     try {
-      const respuesta = await fetch('http://localhost:3000/api/categorias', {
+      const respuesta = await fetch(`http://localhost:3000/api/productos/categorias?organizationId=${organizationId}`, {
         headers: { 'Authorization': `Bearer ${auth.token}` }
       });
       const datos = await respuesta.json();
@@ -137,8 +198,10 @@ const guardarEnBD = async () => {
                           categoriaSeleccionada?.nombre.toUpperCase().includes('SAMSUNG') ||
                           categoriaSeleccionada?.nombre.toUpperCase().includes('SMARTPHONE');
 
-    const datosParaEnviar = {
-      nombre: nuevoProducto.modelo, 
+    const datosParaEnviar: Record<string, unknown> = {
+      organizationId,
+      warehouseId,
+      nombre: nuevoProducto.modelo,
       precio: Number(nuevoProducto.precio),
       stock: Number(nuevoProducto.stock),
       categoriaId: Number(nuevoProducto.categoriaId),
@@ -149,6 +212,11 @@ const guardarEnBD = async () => {
     // ✅ Solo agregar IMEI si es equipo móvil
     if (esEquipoMovil && nuevoProducto.imei) {
       datosParaEnviar.imei = nuevoProducto.imei;
+    }
+
+    if (!warehouseId || warehouseId <= 0) {
+      alert("Indica una bodega válida para registrar el stock");
+      return;
     }
 
     if (!datosParaEnviar.nombre || !datosParaEnviar.categoriaId) {
@@ -182,7 +250,7 @@ const guardarEnBD = async () => {
   const eliminarDeBD = async (id: number) => {
     if (!confirm("¿Eliminar producto?")) return;
     try {
-      await fetch(`http://localhost:3000/api/productos/${id}`, {
+      await fetch(`http://localhost:3000/api/productos/${id}?organizationId=${organizationId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${auth.token}` }
       });
@@ -201,7 +269,7 @@ const guardarEnBD = async () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${auth.token}` 
         },
-        body: JSON.stringify({ cantidad: Number(cantidad) })
+        body: JSON.stringify({ cantidad: Number(cantidad), organizationId, warehouseId })
       });
 
       if (respuesta.ok) {
@@ -217,7 +285,14 @@ const guardarEnBD = async () => {
   };
 
   const prepararEdicion = (p: any) => {
-    setNuevoProducto({ modelo: p.nombre, precio: p.precio, stock: p.stock, categoriaId: p.categoriaId.toString() });
+    setNuevoProducto({
+      modelo: p.nombre,
+      precio: p.precio,
+      stock: String(cantidadStockProducto(p)),
+      categoriaId: p.categoriaId.toString(),
+      imei: p.imei || '',
+      subcategoriaId: p.subcategoriaId ?? null
+    });
     setIdProductoAEditar(p.id);
     setEditando(true);
     setMostrarFormulario(true);
@@ -231,7 +306,7 @@ const guardarEnBD = async () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${auth.token}`
         },
-        body: JSON.stringify({ cantidad: item.cantidad })
+        body: JSON.stringify({ cantidad: item.cantidad, organizationId, warehouseId })
       });
     }
     cargarProductos();
@@ -248,8 +323,8 @@ const guardarEnBD = async () => {
         label : "Valor en Inventario",
         data: listaCategorias.map (cat => {
           return listaProductos
-          .filter(p => String(p. categoriaId) === String(cat.id))
-          .reduce((acc, p) => acc + (Number(p.precio) * Number(p.stock)), 0);
+          .filter(p => String(p.categoriaId) === String(cat.id))
+          .reduce((acc, p) => acc + (Number(p.precio) * cantidadStockProducto(p)), 0);
         }),
         backgroundColor: [
           '#00ff88', '#7000ff', '#00d1ff', '#ff0055', '#ffcc00'
@@ -350,6 +425,48 @@ const guardarEnBD = async () => {
 
             {pantalla === 'inventario' && (
               <div>
+                <div style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '12px',
+                  alignItems: 'flex-end',
+                  marginBottom: '14px',
+                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  background: 'rgba(0,210,255,0.06)',
+                  border: `1px solid ${colores.neonAzul}44`,
+                }}>
+                  <div style={{ flex: '1 1 140px' }}>
+                    <label style={{ fontSize: '0.75rem', color: colores.neonAzul, display: 'block' }}>Organización (organizationId)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      style={{ ...inputStyle, marginBottom: 0 }}
+                      value={organizationId}
+                      onChange={(e) => {
+                        const n = Math.floor(Number(e.target.value));
+                        if (Number.isFinite(n) && n > 0) setOrganizationId(n);
+                      }}
+                    />
+                  </div>
+                  <div style={{ flex: '1 1 160px' }}>
+                    <label style={{ fontSize: '0.75rem', color: colores.neonAzul, display: 'block' }}>Bodega (warehouseId)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      style={{ ...inputStyle, marginBottom: 0 }}
+                      value={warehouseId}
+                      onChange={(e) => {
+                        const n = Math.floor(Number(e.target.value));
+                        if (Number.isFinite(n) && n > 0) setWarehouseId(n);
+                      }}
+                    />
+                  </div>
+                  <p style={{ flex: '1 1 220px', margin: 0, fontSize: '0.72rem', color: 'rgba(255,255,255,0.55)', lineHeight: 1.4 }}>
+                    Sin tocar estos campos se usan valores guardados aquí en el navegador o los definidos en VITE_DEFAULT_ORGANIZATION_ID y VITE_DEFAULT_WAREHOUSE_ID (si no existen, 1). Alta de producto y entradas de stock aplican a la bodega elegida.
+                  </p>
+                </div>
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                  <h2>STOCK {filtroCategoria !== 'todos' && ` - ${listaCategorias.find(c => String(c.id) === String(filtroCategoria))?.nombre.toUpperCase()}`}</h2>
                   {/* LUPA DE BÚSQUEDA */}
@@ -372,14 +489,14 @@ const guardarEnBD = async () => {
       style={{ background: 'transparent', border: 'none', color: 'white', outline: 'none', width: '100%' }}
     />
   </div>
-                  <button onClick={() => { setEditando(false); setNuevoProducto({modelo:'', precio:'', stock:'', categoriaId:'', imei: ''}); setMostrarFormulario(true); }} style={botonGuardarStyle}>+ AGREGAR</button>
+                  <button onClick={() => { setEditando(false); setNuevoProducto({ modelo: '', precio: '', stock: '', categoriaId: '', imei: '', subcategoriaId: null }); setMostrarFormulario(true); }} style={botonGuardarStyle}>+ AGREGAR</button>
                 </div>
                 
                 {mostrarFormulario ? (
   <div style={{ background: 'rgba(255,255,255,0.05)', padding: '2rem', borderRadius: '15px', marginBottom: '20px' }}>
     <input type="text" placeholder="Modelo" style={inputStyle} value={nuevoProducto.modelo} onChange={(e) => setNuevoProducto({...nuevoProducto, modelo: e.target.value})} />
     <input type="number" placeholder="Precio" style={inputStyle} value={nuevoProducto.precio} onChange={(e) => setNuevoProducto({...nuevoProducto, precio: e.target.value})} />
-    <input type="number" placeholder="Stock" style={inputStyle} value={nuevoProducto.stock} onChange={(e) => setNuevoProducto({...nuevoProducto, stock: e.target.value})} />
+    <input type="number" placeholder={`Cantidad en bodega #${warehouseId}`} style={inputStyle} value={nuevoProducto.stock} onChange={(e) => setNuevoProducto({...nuevoProducto, stock: e.target.value})} />
     
       {/* ✅ NUEVO: Campo IMEI solo para categoría "Celulares" */}
     {(() => {
@@ -529,7 +646,7 @@ const guardarEnBD = async () => {
   )}
 </td>
       <td style={{ textAlign: 'center' }}>${p.precio}</td>
-      <td style={{ textAlign: 'center' }}>{p.stock}</td>
+      <td style={{ textAlign: 'center' }}>{cantidadStockProducto(p)}</td>
       
       {/* TUS BOTONES ORIGINALES (No los toqué) */}
      <td style={{ display: 'flex', gap: '10px', justifyContent: 'center', padding: '10px' }}>
@@ -571,7 +688,7 @@ const guardarEnBD = async () => {
               cat.nombre,
               "$" + listaProductos
                 .filter(p => String(p.categoriaId) === String(cat.id))
-                .reduce((acc, p) => acc + (Number(p.precio) * Number(p.stock)), 0).toLocaleString()
+                .reduce((acc, p) => acc + (Number(p.precio) * cantidadStockProducto(p)), 0).toLocaleString()
             ]),
           });
           doc.save(`Reporte_Accessphone_${new Date().toLocaleDateString()}.pdf`);
@@ -593,16 +710,16 @@ const guardarEnBD = async () => {
   <div style={cardStyle(colores.neonAzul)}>
     <p style={{ fontSize: '0.7rem', opacity: 0.8 }}>VALOR TOTAL INVENTARIO</p>
     <h3 style={{ fontSize: '1.8rem' }}>
-      ${listaProductos.reduce((acc: number, p: any) => acc + (Number(p.precio) * Number(p.stock)), 0).toLocaleString()}
+      ${listaProductos.reduce((acc: number, p: any) => acc + (Number(p.precio) * cantidadStockProducto(p)), 0).toLocaleString()}
     </h3>
   </div>
 
   {/* Tarjeta 2: Stock Bajo (LA QUE SE HABÍA PERDIDO) */}
   <div style={cardStyle('#ff4444')}>
     <p style={{ fontSize: '0.7rem', opacity: 0.8 }}>⚠️ STOCK BAJO (Menos de 5)</p>
-    {listaProductos.filter(p => Number(p.stock) < 5).length > 0 ? (
+    {listaProductos.filter(p => cantidadStockProducto(p) < 5).length > 0 ? (
       <h3 style={{ fontSize: '1.8rem', color: '#ffcc00' }}>
-        {listaProductos.filter(p => Number(p.stock) < 5).length} Productos
+        {listaProductos.filter(p => cantidadStockProducto(p) < 5).length} Productos
       </h3>
     ) : (
       <h3 style={{ fontSize: '1.2rem', marginTop: '10px', color: '#00ff88' }}>✅ Todo al día</h3>
@@ -613,7 +730,7 @@ const guardarEnBD = async () => {
   <div style={cardStyle('#7000ff')}>
     <p style={{ fontSize: '0.7rem', opacity: 0.8 }}>📦 UNIDADES EN STOCK</p>
     <h3 style={{ fontSize: '1.8rem' }}>
-      {listaProductos.reduce((acc: number, p: any) => acc + Number(p.stock), 0)}
+      {listaProductos.reduce((acc: number, p: any) => acc + cantidadStockProducto(p), 0)}
     </h3>
   </div>
 </div>
@@ -636,10 +753,10 @@ const guardarEnBD = async () => {
 }}>
   <h4 style={{ color: '#00d1ff' }}>💡 Sugerencia de Inversión</h4>
   <p style={{ fontSize: '1rem' }}>
-    {listaProductos.filter(p => Number(p.stock) < 3).length > 0 ? (
+    {listaProductos.filter(p => cantidadStockProducto(p) < 3).length > 0 ? (
       <>
-        Andrea, tienes <strong>{listaProductos.filter(p => Number(p.stock) < 3).length} productos</strong> críticos. 
-        Te sugiero invertir primero en reponer <strong>{listaProductos.find(p => Number(p.stock) < 3)?.modelo}</strong>.
+        Andrea, tienes <strong>{listaProductos.filter(p => cantidadStockProducto(p) < 3).length} productos</strong> críticos. 
+        Te sugiero invertir primero en reponer <strong>{listaProductos.find(p => cantidadStockProducto(p) < 3)?.nombre}</strong>.
       </>
     ) : (
       "Tu stock está sano. Si tienes capital extra, podrías invertir en nuevas tendencias de Estuches para aumentar variedad."
@@ -681,6 +798,9 @@ const guardarEnBD = async () => {
     }}>
       
       <h4 style={{ color: colores.neonAzul }}>Registrar Venta</h4>
+      <p style={{ fontSize: '0.76rem', color: 'rgba(255,255,255,0.55)', marginTop: '6px', marginBottom: '10px', lineHeight: 1.4 }}>
+        Inventario por organización {organizationId}, bodega {warehouseId}. Ajusta esos valores en la pantalla de Inventario; al facturar se descuenta stock desde esa bodega.
+      </p>
       <div style={{ marginBottom: '15px' }}>
   <label style={{ color: colores.neonAzul }}>Tipo de venta:</label>
   <select 
@@ -734,7 +854,7 @@ const guardarEnBD = async () => {
       <option value="">Seleccionar producto</option>
       {listaProductos.map((p) => (
         <option key={p.id} value={p.id}>
-          {p.nombre} - Stock: {p.stock}
+          {p.nombre} - Stock: {cantidadStockProducto(p)}
         </option>
       ))}
     </select>
@@ -1002,7 +1122,7 @@ ventaActual.map((item, index) => (
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${auth.token}`
         },
-        body: JSON.stringify({ cantidad: item.cantidad })
+        body: JSON.stringify({ cantidad: item.cantidad, organizationId, warehouseId })
       });
     }
 
@@ -1258,10 +1378,11 @@ ventaActual.map((item, index) => (
             const cant = Number((document.getElementById('cantidadDano') as HTMLInputElement).value);
             
             // 1. Restamos del inventario
-            const listaActualizada = listaProductos.map(p => {
+            const listaActualizada = listaProductos.map((p) => {
               if (p.id === productoSeleccionadoDano.id) {
-                const nuevoStock = Number(p.stock) - cant;
-               return { ...p, stock: nuevoStock < 0 ? 0 : nuevoStock };
+                const actual = cantidadStockProducto(p);
+                const nuevoStock = actual - cant;
+                return { ...p, stock: nuevoStock < 0 ? 0 : nuevoStock };
               }
               return p;
             });

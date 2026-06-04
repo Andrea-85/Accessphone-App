@@ -1,24 +1,22 @@
 import { Router } from 'express';
-import { registrarUsuario, loginUsuario } from '../controllers/authController.js';
-import { loginUsuario, registrarNuevoUsuario } from '../controllers/authController';
+import { registrarUsuario, loginUsuario } from '../controllers/authController';
+import { organizationMiddleware } from '../middlewares/organizationMiddleware';
 
 const router = Router();
 
-router.post('/register', registrarNuevoUsuario);
-
 router.post('/registro', async (req, res) => {
     try {
-        const usuario = await registrarUsuario(req.body);
+        const usuario = await registrarUsuario(req);
         res.status(201).json({ mensaje: "Usuario creado", id: usuario.id });
-    } catch (error) {
-        res.status(400).json({ error: "Error al registrar usuario" });
+    } catch (error: any) {
+        res.status(400).json({ error: error.message });
     }
 });
 
 router.post('/login', async (req, res) => {
     try {
-        const { email, passwordPlana } = req.body;
-        const resultado = await loginUsuario(email, passwordPlana || req.body.password );
+        // Pasamos el objeto 'req' completo para que el controlador extraiga los datos
+        const resultado = await loginUsuario(req);
         res.json(resultado);
     } catch (error: any) {
         res.status(401).json({ error: error.message });
