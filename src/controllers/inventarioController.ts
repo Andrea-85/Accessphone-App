@@ -2,9 +2,8 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-export const cargarInventarioMasivo = async (req: any) => {
+export const cargarInventarioMasivo = async (req: any, organizationId: number, userId: number) => {
     const { movimientos } = req.body; // Array de { productoId, cantidad, warehouseId }
-    const organizationId = Number(req.organizationId);
 
     return await prisma.$transaction(async (tx) => {
         const resultados = [];
@@ -29,10 +28,13 @@ export const cargarInventarioMasivo = async (req: any) => {
             // Registro de auditoría para cada entrada
             await tx.movimientosInventario.create({
                 data: {
-                    varianteId: m.varianteId,
-                    cantidad: m.cantidad,
+                    varianteId: Number(m.varianteId), 
+                    cantidad: Number(m.cantidad),
                     tipoMovimiento: "ENTRADA",
-                    usuarioId: Number(req.userId)
+                    usuarioId: Number(req.usuarioId || 1),
+                    // ESTOS SON OBLIGATORIOS POR EL ESQUEMA NUEVO
+                    justificacion: "Ingreso de inventario desde controlador", 
+                    evidenciaUrl: null
                 }
             });
             resultados.push(stock);

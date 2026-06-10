@@ -46,7 +46,9 @@ export const registrarVenta = async (req: any) => {
                     varianteId: p.varianteId,
                     cantidad: -p.cantidad,
                     tipoMovimiento: "SALIDA", // O "VENTA" si tu lógica lo prefiere
-                    usuarioId: usuarioId
+                    usuarioId: usuarioId,
+                    justificacion: "Venta automática generada por sistema", 
+                    evidenciaUrl: null
                 }
             });
         }
@@ -103,7 +105,9 @@ export const cancelarVenta = async (req: any) => {
                         varianteId: detalle.varianteId,
                         cantidad: detalle.cantidad, // Valor positivo porque entra
                         tipoMovimiento: "ENTRADA",
-                        usuarioId: usuarioId
+                        usuarioId: usuarioId,
+                        justificacion: "Venta automática generada por sistema", 
+                        evidenciaUrl: null
                     }
                 });
             }

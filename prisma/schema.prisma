@@ -31,7 +31,7 @@ enum Rol {
 
 model Organization {
   id        Int      @id @default(autoincrement())
-  nombre    String   @db.VarChar(120)
+  nombre    String   @unique @db.VarChar(120)
   slug      String?  @unique @db.VarChar(80)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -92,7 +92,7 @@ model Warehouse {
 
 model WarehouseStock {
   id          Int @id @default(autoincrement())
-  warehouseId Int
+  warehouseId Int  // ID de la bodega (1=Bodega, 2=Local)
   varianteId  Int
   cantidad    Int @default(0)
 
@@ -160,7 +160,8 @@ model Variante {
   stockActual    Int              @default(0)
   detalles       Detalles_venta[]
 
-  producto Productos @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  producto               Productos               @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  movimientosInventarios MovimientosInventario[]
 
   @@index([productoId])
 }
@@ -168,7 +169,7 @@ model Variante {
 model Categorias {
   id             Int            @id @default(autoincrement())
   organizationId Int
-  nombre         String         @db.VarChar(50)
+  nombre         String         @unique @db.VarChar(50)
   subcategorias  Subcategoria[]
   productos      Productos[]
 
@@ -244,7 +245,7 @@ model Usuarios {
   id                    Int                     @id @default(autoincrement())
   organizationId        Int
   nombre                String
-  email                 String
+  email                 String                  @unique
   password              String
   rol                   Rol                     @default(VENDEDOR)
   createdAt             DateTime                @default(now())
@@ -268,16 +269,27 @@ model Reportes_novedad {
   estado      String   @default("pendiente") @db.VarChar(20) // pendiente, resuelto
 }
 
-model MovimientosInventario {
-  id             Int       @id @default(autoincrement())
-  tipoMovimiento String // "ENTRADA", "SALIDA", "AJUSTE"
-  cantidad       Int
-  fecha          DateTime  @default(now())
-  varianteId     Int
-  usuarioId      Int // ID del bodeguero o vendedor que hizo el movimiento
-  productos      Productos @relation(fields: [varianteId], references: [id])
-  usuario        Usuarios  @relation(fields: [usuarioId], references: [id])
+enum TipoMovimiento {
+  ENTRADA
+  SALIDA
+  VENTA
+  MERMA_RECEPCION
+  DAÑO_OPERATIVO
+}
 
-  @@index([varianteId])
-  @@index([usuarioId])
+model MovimientosInventario {
+  id             Int            @id @default(autoincrement())
+  varianteId     Int
+  cantidad       Int
+  tipoMovimiento TipoMovimiento
+  usuarioId      Int
+  justificacion  String         @db.VarChar(255)
+  evidenciaUrl   String?
+  createdAt      DateTime       @default(now())
+
+  // Aquí definimos los nombres de las relaciones para evitar conflictos
+  usuario     Usuarios   @relation(fields: [usuarioId], references: [id])
+  variante    Variante   @relation(fields: [varianteId], references: [id], map: "MovInv_Variante_FK")
+  productos   Productos? @relation(fields: [productosId], references: [id])
+  productosId Int?
 }

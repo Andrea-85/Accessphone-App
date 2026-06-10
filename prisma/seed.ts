@@ -2,30 +2,54 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
 async function main() {
-  // 1. Creamos la categoría principal
-  const catVidrios = await prisma.categorias.upsert({
-    where: { nombre: 'Vidrios' },
+  // 1. Crear Organización
+  const org = await prisma.organization.upsert({
+    where: { nombre: 'Accessphone' },
     update: {},
-    create: { nombre: 'Vidrios' },
+    create: { nombre: 'Accessphone' },
   });
 
-  // 2. Creamos las subcategorías para Vidrios
-  const tiposVidrios = ['Cerámico', 'Blindado', '5D', 'Mate', 'Privacidad'];
+  // 2. Crear Administrador (Usuarios)
+  await prisma.usuarios.upsert({
+    where: { email: 'admin@accessphone.com' },
+    update: {},
+    create: { 
+      nombre: 'Admin', 
+      email: 'admin@accessphone.com',
+      password: 'password123', // Pon aquí la que tú quieras
+      organizationId: org.id 
+    }
+  });
 
+  // 3. Crear Bodegas
+  await prisma.warehouse.createMany({
+    data: [
+      { nombre: 'Bodega Principal', organizationId: org.id },
+      { nombre: 'Local Ventas', organizationId: org.id }
+    ],
+    skipDuplicates: true
+  });
+
+  // 4. Crear Categorías
+  const catVidrios = await prisma.categorias.upsert({
+    where: { organizationId_nombre: { organizationId: org.id, nombre: 'Vidrios' } },
+    update: {},
+    create: { nombre: 'Vidrios', organizationId: org.id },
+  });
+
+  // 5. Crear Subcategorías
+  const tiposVidrios = ['Cerámico', 'Blindado', '5D', 'Mate', 'Privacidad'];
   for (const tipo of tiposVidrios) {
     await prisma.subcategoria.upsert({
-      where: { id: 0 }, // Esto es solo referencial para el upsert
+      where: { categoriaId_nombre: { categoriaId: catVidrios.id, nombre: tipo } },
       update: {},
-      create: {
-        nombre: tipo,
-        categoriaId: catVidrios.id
-      }
+      create: { nombre: tipo, categoriaId: catVidrios.id }
     });
   }
 
-  console.log('--- DATOS DE VIDRIOS CARGADOS CON ÉXITO ---');
+  console.log('✅ BASE DE DATOS SEMBRADA: Organización, Admin, Bodegas y Categorías listos.');
 }
 
 main()
-  .catch((e) => console.error(e))
+  .catch((e) => { console.error(e); process.exit(1); })
   .finally(async () => await prisma.$disconnect());

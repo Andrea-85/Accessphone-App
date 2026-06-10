@@ -25,9 +25,6 @@ app.use('/api/auth', authRoutes);
 
 // 2. APLICAR SEGURIDAD A TODO LO DEMÁS
 app.use(organizationMiddleware);
-app.listen(3000, () => {
-    console.log("¡SERVICIO ESCUCHANDO EN PUERTO 3000!");
-});
 
 // 3. RUTAS PROTEGIDAS (Ya pasan por la validación de organización)
 app.use('/api/productos', productoRoutes);
