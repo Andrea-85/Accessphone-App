@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { registrarUsuario, loginUsuario } from '../controllers/authController';
+import { registrarUsuario, loginUsuario, obtenerUsuariosPorOrganizacion } from '../controllers/authController';
 import { organizationMiddleware } from '../middlewares/organizationMiddleware';
+import { validarToken } from '../middlewares/authMiddleware';
 
 const router = Router();
 
@@ -20,6 +21,15 @@ router.post('/login', async (req, res) => {
         res.json(resultado);
     } catch (error: any) {
         res.status(401).json({ error: error.message });
+    }
+});
+
+router.get('/usuarios', validarToken, organizationMiddleware, async (req, res) => {
+    try {
+        const usuarios = await obtenerUsuariosPorOrganizacion(req);
+        res.json(usuarios);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
     }
 });
 

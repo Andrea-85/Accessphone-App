@@ -15,8 +15,11 @@ router.post('/', async (req: Request, res: Response) => {
 
     const nuevoReporte = await prisma.reportes_novedad.create({
       data: {
-        empleado,
-        producto,
+      organizationId: (req as any).organizationId || 1, 
+      empleadoId: Number(req.body.empleadoId) || 1,      
+      varianteId: Number(req.body.varianteId) || 1,
+       empleadoText: empleado,
+       productoText: producto,
         tipo,
         descripcion,
         foto_url: foto_url || null
@@ -49,7 +52,7 @@ router.get('/buscar/:producto', async (req: Request, res: Response) => {
     
     const reportes = await prisma.reportes_novedad.findMany({
       where: {
-        producto: {
+        productoText: {
           contains: producto, // Ahora TypeScript sabe que es un string
           mode: 'insensitive'
         }

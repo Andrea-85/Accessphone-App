@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -33,7 +34,11 @@ export const loginUsuario = async (req: any) => {
         }
     });
 
-    if (!usuario || usuario.password !== password) {
+    const passwordValida =
+        usuario &&
+        (usuario.password === password || await bcrypt.compare(password, usuario.password).catch(() => false));
+
+    if (!usuario || !passwordValida) {
         throw new Error("Credenciales inválidas o empresa no encontrada");
     }
 
@@ -48,7 +53,24 @@ export const loginUsuario = async (req: any) => {
         token, 
         usuario: { 
             nombre: usuario.nombre, 
-            rol: usuario.rol 
+            rol: usuario.rol,
+            organizationId: usuario.organizationId
         } 
     };
+};
+
+export const obtenerUsuariosPorOrganizacion = async (req: any) => {
+    const organizationId = Number(req.organizationId) || 1; // Leemos del middleware de organización o token
+
+    return await prisma.usuarios.findMany({
+        where: { organizationId },
+        select: {
+            id: true,
+            nombre: true,
+            email: true,
+            rol: true,
+            createdAt: true
+        },
+        orderBy: { nombre: 'asc' }
+    });
 };
