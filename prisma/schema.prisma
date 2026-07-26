@@ -16,6 +16,7 @@ model Organization {
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
   balance             Decimal            @default(0) @db.Decimal(14, 2)
+  plan               PlanType           @default(ESTANDAR)
   subscriptionStatus  SubscriptionStatus @default(ACTIVE)
   subscriptionExpires DateTime?
   automaticLock       Boolean            @default(true)
@@ -508,6 +509,13 @@ enum TipoMovimiento {
 enum ModoAtencion {
   IA
   HUMANO
+
+  @@schema("public")
+}
+
+enum PlanType {
+  ESTANDAR
+  PREMIUM
 
   @@schema("public")
 }
