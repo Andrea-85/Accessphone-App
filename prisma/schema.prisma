@@ -206,10 +206,13 @@ model Ventas {
   organizationId Int
   fecha            DateTime         @default(now())
   clienteId        Int
+  usuarioId        Int?             // Permite saber qué vendedor hizo la venta
   total            Decimal          @db.Decimal(12, 2)
-  
-  // Estados sugeridos: "PENDIENTE_PAGO", "PAGADA", "EN_PREPARACION", "ENVIADA", "ENTREGADA"
-  estado           String           @default("PENDIENTE_PAGO")
+  estado           String           @default("PENDIENTE_PAGO") // Estados sugeridos: "PENDIENTE_PAGO", "PAGADA", "EN_PREPARACION", "ENVIADA", "ENTREGADA"
+  origen           String?          @default("POS") // Para diferenciar "POS" o "WHATSAPP"
+  usuario        Usuarios?        @relation(fields: [usuarioId], references: [id])
+  descuento       Float?    @default(0)
+  motivoDescuento String?
   
   // 🚚 NUEVOS CAMPOS DE LOGÍSTICA Y DESPACHO
   transportadora   String?          @default("Interrapidísimo") // Texto libre (Interrapidísimo, Envía, Servientrega, Flete Propio)
@@ -254,6 +257,7 @@ model Usuarios {
   updatedAt             DateTime                @updatedAt
   movimientosInventario MovimientosInventario[]
   organization          Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ventas                Ventas[]
 
   @@unique([organizationId, email])
   @@index([organizationId])

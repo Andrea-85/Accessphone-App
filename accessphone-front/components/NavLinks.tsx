@@ -68,6 +68,13 @@ export default function NavLinks() {
           >
             👥 Gestión de Empleados
           </Link>
+
+          <Link 
+           href="/comisiones" 
+           className="flex items-center gap-2 px-3 py-2 rounded-lg font-bold text-zinc-700 hover:bg-zinc-200/70 transition-colors"
+          >
+           💸 Nómina y Comisiones
+          </Link>
         </div>
       )}
 
@@ -114,7 +121,7 @@ export default function NavLinks() {
             href="/kardex" 
             className="flex items-center gap-2 px-3 py-2 rounded-lg font-bold text-zinc-700 hover:bg-zinc-200/70 transition-colors"
           >
-            📈 Kardex de Inventario
+            📈 Registro de Entradas y Salidas
           </Link>
           <Link 
             href="/despacho" 

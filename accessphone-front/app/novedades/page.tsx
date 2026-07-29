@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '@/services/api';
 
 type TipoNovedadUI = 'AVERIA_PROVEEDOR' | 'DANIO_LOCAL' | 'PERDIDA';
@@ -10,15 +10,27 @@ interface Warehouse {
   nombre: string;
 }
 
-export default function ReporteNovedadesPage() {
-  // Datos del usuario extraídos de la sesión real
-  const [usuarioActual, setUsuarioActual] = useState<any>(null);
+interface VarianteProducto {
+  id: number;
+  sku?: string;
+  stockActual?: number;
+  producto?: {
+    nombre: string;
+  };
+}
 
-  // Lista de Bodegas registradas
+export default function ReporteNovedadesPage() {
+  const [usuarioActual, setUsuarioActual] = useState<any>(null);
   const [bodegas, setBodegas] = useState<Warehouse[]>([]);
   const [warehouseId, setWarehouseId] = useState<number | ''>('');
 
+  // Estados para el buscador avanzado
+  const [variantes, setVariantes] = useState<VarianteProducto[]>([]);
+  const [busqueda, setBusqueda] = useState('');
   const [varianteId, setVarianteId] = useState<number | ''>('');
+  const [productoSeleccionadoTexto, setProductoSeleccionadoTexto] = useState('');
+  const [mostrarSugerencias, setMostrarSugerencias] = useState(false);
+
   const [cantidad, setCantidad] = useState<number | ''>('');
   const [tipo, setTipo] = useState<TipoNovedadUI>('DANIO_LOCAL');
   const [descripcion, setDescripcion] = useState('');
@@ -28,25 +40,40 @@ export default function ReporteNovedadesPage() {
   const [mensaje, setMensaje] = useState('');
   const [error, setError] = useState('');
 
-  // 1. Cargar usuario en sesión y lista de bodegas
+  const contenedorRef = useRef<HTMLDivElement>(null);
+
+  // 1. Cargar usuario, bodegas y variantes al iniciar
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const userRaw = localStorage.getItem('accessphone_user');
       if (userRaw) setUsuarioActual(JSON.parse(userRaw));
     }
 
-    const cargarBodegas = async () => {
+    const cargarDatosIniciales = async () => {
       try {
-        const res = await api.get('/api/admin/warehouses');
-        const lista = res.data?.success ? res.data.data : Array.isArray(res.data) ? res.data : [];
-        setBodegas(lista);
-        if (lista.length > 0) setWarehouseId(lista[0].id);
+        const resBodegas = await api.get('/api/admin/warehouses');
+        const listaBodegas = resBodegas.data?.success ? resBodegas.data.data : Array.isArray(resBodegas.data) ? resBodegas.data : [];
+        setBodegas(listaBodegas);
+        if (listaBodegas.length > 0) setWarehouseId(listaBodegas[0].id);
+
+        const resVariantes = await api.get('/api/inventario');
+        const listaVariantes = resVariantes.data?.success ? resVariantes.data.data : Array.isArray(resVariantes.data) ? resVariantes.data : [];
+        setVariantes(listaVariantes);
       } catch (err) {
-        console.error("Error al cargar bodegas para novedades:", err);
+        console.error("Error al cargar datos iniciales:", err);
       }
     };
 
-    cargarBodegas();
+    cargarDatosIniciales();
+
+    // Cerrar sugerencias al hacer clic fuera del buscador
+    const handleClickFuera = (e: MouseEvent) => {
+      if (contenedorRef.current && !contenedorRef.current.contains(e.target as Node)) {
+        setMostrarSugerencias(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickFuera);
+    return () => document.removeEventListener('mousedown', handleClickFuera);
   }, []);
 
   const manejarCambioFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -55,10 +82,25 @@ export default function ReporteNovedadesPage() {
     }
   };
 
+  // Filtrar variantes en tiempo real según lo que escriba el usuario (nombre o SKU)
+  const variantesFiltradas = variantes.filter((v) => {
+    const nombre = (v.producto?.nombre || '').toLowerCase();
+    const sku = (v.sku || '').toLowerCase();
+    const query = busqueda.toLowerCase();
+    return nombre.includes(query) || sku.includes(query);
+  });
+
+  const seleccionarVariante = (v: VarianteProducto) => {
+    setVarianteId(v.id);
+    setProductoSeleccionadoTexto(`${v.producto?.nombre || 'Producto'} (SKU: ${v.sku || 'N/A'})`);
+    setBusqueda('');
+    setMostrarSugerencias(false);
+  };
+
   const enviarReporte = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!varianteId || !cantidad || cantidad <= 0 || !warehouseId) {
-      setError('Por favor completa la bodega, ID de variante válido y la cantidad.');
+      setError('Por favor selecciona una bodega, un producto válido y la cantidad.');
       return;
     }
     if (!foto && tipo === 'AVERIA_PROVEEDOR') {
@@ -71,7 +113,6 @@ export default function ReporteNovedadesPage() {
       setError('');
       setMensaje('');
 
-      // Envío centralizado con Axios api
       await api.post('/api/novedades', {
         varianteId: Number(varianteId),
         cantidad: Number(cantidad),
@@ -80,12 +121,13 @@ export default function ReporteNovedadesPage() {
         descripcion,
         empleadoId: usuarioActual?.id || 1,
         empleadoText: usuarioActual?.nombre || 'Bodeguero Autenticado',
-        productoText: `Variante ID #${varianteId}`,
+        productoText: productoSeleccionadoTexto,
         foto_url: foto ? `https://supabase.storage/mermas/${foto.name}` : null
       });
 
       setMensaje('✅ Novedad registrada con éxito. Stock descontado y en revisión gerencial.');
       setVarianteId('');
+      setProductoSeleccionadoTexto('');
       setCantidad('');
       setDescripcion('');
       setFoto(null);
@@ -146,34 +188,71 @@ export default function ReporteNovedadesPage() {
             </select>
           </label>
 
-          {/* Fila de Datos Técnicos */}
-          <div className="grid grid-cols-2 gap-4">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-bold text-slate-600 uppercase">ID Variante Producto</span>
-              <input
-                type="number"
-                min={1}
-                required
-                value={varianteId}
-                onChange={(e) => setVarianteId(e.target.value === '' ? '' : Number(e.target.value))}
-                className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-500"
-                placeholder="Ej: 42"
-              />
-            </label>
+          {/* BUSCADOR INTELIGENTE / AUTOCOMPLETE (Ideal para miles de productos) */}
+          <div className="space-y-1.5 relative" ref={contenedorRef}>
+            <span className="text-xs font-bold text-slate-600 uppercase">Buscar Producto / Variante *</span>
+            
+            {productoSeleccionadoTexto ? (
+              <div className="flex items-center justify-between h-10 rounded-xl border border-emerald-300 bg-emerald-50 px-3 text-sm font-bold text-emerald-900">
+                <span>✨ {productoSeleccionadoTexto}</span>
+                <button
+                  type="button"
+                  onClick={() => { setVarianteId(''); setProductoSeleccionadoTexto(''); }}
+                  className="text-xs text-red-600 hover:underline font-bold"
+                >
+                  Cambiar
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <input
+                  type="text"
+                  value={busqueda}
+                  onChange={(e) => {
+                    setBusqueda(e.target.value);
+                    setMostrarSugerencias(true);
+                  }}
+                  onFocus={() => setMostrarSugerencias(true)}
+                  placeholder="Escribe el nombre o SKU para filtrar..."
+                  className="w-full h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-500"
+                />
 
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-bold text-slate-600 uppercase">Cantidad Afectada</span>
-              <input
-                type="number"
-                min={1}
-                required
-                value={cantidad}
-                onChange={(e) => setCantidad(e.target.value === '' ? '' : Number(e.target.value))}
-                className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-500"
-                placeholder="Ej: 5"
-              />
-            </label>
+                {/* Lista flotante de resultados filtrados */}
+                {mostrarSugerencias && busqueda.trim() !== '' && (
+                  <div className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg">
+                    {variantesFiltradas.length === 0 ? (
+                      <div className="p-3 text-xs text-slate-400 text-center">No se encontraron productos con ese nombre o SKU.</div>
+                    ) : (
+                      variantesFiltradas.map((v) => (
+                        <div
+                          key={v.id}
+                          onClick={() => seleccionarVariante(v)}
+                          className="px-3 py-2 text-xs hover:bg-indigo-50 cursor-pointer border-b border-slate-100 last:border-none flex justify-between items-center"
+                        >
+                          <span className="font-bold text-slate-800">{v.producto?.nombre || 'Producto'} <span className="font-normal text-slate-500">(SKU: {v.sku || 'N/A'})</span></span>
+                          <span className="font-mono text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">Stock: {v.stockActual ?? 0}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+
+          {/* Cantidad Afectada */}
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-bold text-slate-600 uppercase">Cantidad Afectada *</span>
+            <input
+              type="number"
+              min={1}
+              required
+              value={cantidad}
+              onChange={(e) => setCantidad(e.target.value === '' ? '' : Number(e.target.value))}
+              className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-500"
+              placeholder="Ej: 5"
+            />
+          </label>
 
           {/* Selector de Causa */}
           <label className="flex flex-col gap-1.5">

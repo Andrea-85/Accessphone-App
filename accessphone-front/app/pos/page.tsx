@@ -314,9 +314,9 @@ export default function PosPage() {
 
             {productosEncontrados.length > 0 && (
               <div className="absolute top-20 left-6 right-6 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-100">
-                {productosEncontrados.map((p) => (
-                  <button
-                    key={p.varianteId}
+                {productosEncontrados.map((p: any, index: number) => (
+              <button
+                  key={`${p.varianteId || p.id}-${index}`}
                     onClick={() => agregarAlCarrito(p)}
                     className="w-full p-3 text-left hover:bg-slate-50 flex justify-between items-center transition cursor-pointer"
                   >

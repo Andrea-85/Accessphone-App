@@ -22,6 +22,8 @@ import { adminRouter } from './routes/adminRoutes';
 import kardexRoutes from './routes/kardexRoutes';
 import importadorRoutes from './routes/importadorRoutes';
 import proveedoresRoutes from './routes/proveedoresRoutes';
+import { validarToken } from './middlewares/authMiddleware';
+import { verificarPlanPremium } from './middlewares/verificarPlanPremium';
 import multer from 'multer'; 
 import { extraerDatosFactura } from "./services/aiService";
 import { registrarFacturaEnInventario } from "./services/recepcionService";
@@ -69,7 +71,7 @@ app.use('/api/inventario', inventarioRoutes);
 app.use('/api/clientes', clienteRoutes);
 app.use('/api/ventas', ventaRoutes);
 app.use('/api/cartera', carteraRoutes);
-app.use('/api/agente', agenteRoutes);
+app.use('/api/agente', validarToken, verificarPlanPremium, agenteRoutes);
 app.use('/api/pedidos', pedidoRoutes);
 app.use('/api/categorias', categoriaRoutes);
 app.use('/api/reportes', reportesRoutes);
@@ -88,8 +90,8 @@ app.get('/api/cartera/pendientes', obtenerCarteraPendiente);
 // 🚚 RUTA DE DESPACHO DE BODEGA
 app.post('/api/despacho', despacharOrdenController);
 
-// Procesamiento de Facturas con IA
-app.post('/procesar-factura', upload.single('archivo'), async (req, res) => {
+// Procesamiento de Facturas con IA (Protegido con Plan Premium)
+app.post('/procesar-factura', validarToken, verificarPlanPremium, upload.single('archivo'), async (req: any, res) => {
   try {
     if (!req.file) return res.status(400).send("No hay archivo");
     const datosFactura = await extraerDatosFactura(req.file.buffer);

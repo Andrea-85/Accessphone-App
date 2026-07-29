@@ -9,6 +9,6 @@ const router = Router();
 router.use(validarToken);
 
 // POST: /api/importar/excel
-router.post('/excel', upload.single('file'), importarProductosExcel);
+router.post('/excel', upload.single('archivo'), importarProductosExcel);
 
 export default router;

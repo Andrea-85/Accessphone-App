@@ -18,7 +18,7 @@ export default function ImportadorPage() {
 
     try {
       const formData = new FormData();
-      formData.append('file', archivo);
+       formData.append('archivo', archivo);
 
       const token = localStorage.getItem('accessphone_token');
       const res = await fetch('http://localhost:4000/api/importar/excel', {

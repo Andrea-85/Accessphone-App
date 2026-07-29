@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { api, adminService } from '@/services/api'; 
 
 interface Metricas {
@@ -233,17 +234,23 @@ export default function DashboardGerencialPage() {
               </p>
             </div>
 
-            <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-blue-600 block">Cola de Despacho</span>
-                <span className="text-2xl font-black text-zinc-900 mt-2 block">
-                  {metricas?.pedidosPendientesDespacho || 0} Órdenes
-                </span>
+            {/* 🔗 CUADRO INTERACTIVO DE COLA DE DESPACHO */}
+            <Link href="/pedidos?origen=WHATSAPP&estado=PENDIENTE_PAGO" className="block group">
+              <div className="bg-white border-2 border-blue-500/30 hover:border-blue-500 rounded-xl p-5 shadow-sm flex flex-col justify-between transition-all cursor-pointer h-full">
+                <div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold uppercase tracking-wider text-blue-600 block">Cola de Despacho</span>
+                    <span className="text-xs text-blue-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity">Ver órdenes →</span>
+                  </div>
+                  <span className="text-2xl font-black text-zinc-900 mt-2 block">
+                    {metricas?.pedidosPendientesDespacho || 0} Órdenes
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400 mt-4 border-t border-zinc-100 pt-2 font-medium">
+                  Pedidos aprobados en espera de empaque en bodega. Clic para gestionar.
+                </p>
               </div>
-              <p className="text-xs text-zinc-400 mt-4 border-t border-zinc-100 pt-2 font-medium">
-                Pedidos aprobados en espera de empaque en bodega.
-              </p>
-            </div>
+            </Link>
 
             <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
               <div>

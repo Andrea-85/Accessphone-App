@@ -27,9 +27,9 @@ export const registrarVenta = async (req: any, res: Response) => {
         const datosVenta = {
             clienteId: Number(clienteId),
             total: Number(total),
-            descuento: Number(descuento || 0),             // 👈 Nuevo: Monto en COP descontado
-            motivoDescuento: motivoDescuento || null,      // 👈 Nuevo: Justificación ingresada en POS
-            usuarioId,                                     // 👈 Auditoría: ID del cajero/vendedor
+            descuento: Number(descuento || 0),             // Monto en COP descontado
+            motivoDescuento: motivoDescuento || null,      // Justificación ingresada en POS
+            usuarioId: Number(usuarioId),                  // Auditoría: ID del cajero/vendedor
             items: productos.map((p: any) => ({
                 productoId: Number(p.productoId),
                 varianteId: Number(p.varianteId),
@@ -213,27 +213,99 @@ export const registrarMovimiento = async (req: any, res: Response) => {
     }
 };
 
-export const obtenerPedidosPendientes = async (req: any, res: any): Promise<void> => {
+export const obtenerPedidosPendientes = async (req: any, res: Response): Promise<any> => {
   try {
-    const organizationId = req.organizationId || req.user?.organizationId || 1; 
+    const organizationId = Number(req.organizationId || req.user?.organizationId || 1); 
+    const { estado } = req.query; 
 
-    const pedidos = await (prisma as any).venta.findMany({
-      where: {
-        organizationId,
-        estado: 'PENDIENTE_PAGO',
-        origen: 'WHATSAPP'
-      },
+    const filtros: any = {
+      organizationId
+      // Quitamos el filtro estricto de origen para listar las de pendiente de pago de la BD
+    };
+
+    if (estado) {
+      if (estado === 'PENDIENTE_PAGO') {
+        filtros.estado = { in: ['PENDIENTE_PAGO', 'APROBADO', 'PENDIENTE'] };
+      } else {
+        filtros.estado = String(estado);
+      }
+    }
+
+    const pedidos = await prisma.ventas.findMany({
+      where: filtros,
       include: {
-        items: true 
+        detalles: {
+          include: { producto: true }
+        },
+        cliente: true
       },
       orderBy: {
-        id: 'asc' 
+        fecha: 'asc' 
       }
     });
 
-    res.status(200).json(pedidos);
+    return res.status(200).json({
+      success: true,
+      data: pedidos
+    });
   } catch (error: any) {
     console.error("🚨 Error en obtenerPedidosPendientes:", error.message);
-    res.status(500).json({ error: "No se pudo consultar la cola de despacho" });
+    return res.status(500).json({ error: "No se pudo consultar la cola de despacho" });
   }
+};
+
+export const obtenerVentasPorVendedor = async (req: any, res: Response) => {
+    try {
+        const organizationId = Number(req.organizationId || req.user?.organizationId || 1);
+        
+        const ventas = await prisma.ventas.findMany({
+            where: { organizationId },
+            include: {
+                usuario: {
+                    select: { id: true, nombre: true, email: true, rol: true }
+                },
+                cliente: {
+                    select: { id: true, nombre: true }
+                },
+                detalles: true
+            },
+            orderBy: { fecha: 'desc' }
+        });
+
+        const liquidacionPorVendedor: { [key: string]: any } = {};
+
+        for (const venta of ventas) {
+            const vendedorNombre = venta.usuario?.nombre || 'Vendedor Externo / Web';
+            if (!liquidacionPorVendedor[vendedorNombre]) {
+                liquidacionPorVendedor[vendedorNombre] = {
+                    nombre: vendedorNombre,
+                    totalVendido: 0,
+                    cantidadVentas: 0,
+                    totalDescuentos: 0,
+                    ventasDetalle: []
+                };
+            }
+            liquidacionPorVendedor[vendedorNombre].totalVendido += Number(venta.total || 0);
+            liquidacionPorVendedor[vendedorNombre].cantidadVentas += 1;
+            liquidacionPorVendedor[vendedorNombre].totalDescuentos += Number(venta.descuento || 0);
+            
+            // Guardamos el detalle para que el administrador pueda auditar
+            liquidacionPorVendedor[vendedorNombre].ventasDetalle.push({
+                id: venta.id,
+                fecha: venta.fecha,
+                total: venta.total,
+                descuento: venta.descuento,
+                motivoDescuento: venta.motivoDescuento,
+                cliente: venta.cliente?.nombre || 'Cliente General'
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: Object.values(liquidacionPorVendedor)
+        });
+    } catch (error: any) {
+        console.error("🚨 Error al calcular liquidación por vendedor:", error.message);
+        return res.status(500).json({ error: "No se pudo generar el reporte de comisiones." });
+    }
 };

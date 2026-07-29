@@ -17,6 +17,27 @@ router.use(organizationMiddleware);
 
 const UMBRAL_SIMILITUD = 0.60;
 
+// 🔍 ENDPOINT DE CONSULTA GENERAL DE VARIANTES (Requerido para el Buscador Inteligente de Novedades)
+router.get('/', async (req: any, res: Response) => {
+    try {
+        const orgId = Number(req.organizationId);
+        const variantes = await prisma.variante.findMany({
+            where: { producto: { organizationId: orgId } },
+            include: { 
+                producto: { select: { nombre: true } } 
+            },
+            orderBy: { id: 'desc' }
+        });
+
+        return res.status(200).json({
+            success: true,
+            data: variantes
+        });
+    } catch (error: any) {
+        return res.status(500).json({ error: 'Error al consultar las variantes de inventario', detalle: error.message });
+    }
+});
+
 // 1. Recepción de documento
 router.post('/recepcion-documento', upload.single('archivo'), async (req: any, res: Response) => {
     try {
@@ -25,12 +46,10 @@ router.post('/recepcion-documento', upload.single('archivo'), async (req: any, r
         const orgId = Number(req.organizationId);
         const userId = Number(req.user.userId);
 
-        // Intentar obtener la bodega de la organización
         let bodega = await prisma.warehouse.findFirst({
             where: { organizationId: orgId }
         });
 
-        // Inicialización bajo demanda si la BD está limpia
         if (!bodega) {
             console.log(`⚠️ Base de datos limpia detectada. Auto-creando bodega principal para la organización ${orgId}...`);
             bodega = await prisma.warehouse.create({
@@ -70,20 +89,16 @@ router.post('/recepcion-documento', upload.single('archivo'), async (req: any, r
                 let mejorCoincidencia = null;
                 let varianteEncontrada = null;
                 
-                // Solo evaluamos similitud si hay suficientes registros para comparar
                 if (nombresVariantes.length > 0 && variantesBD.length > 0) {
                     const matches = stringSimilarity.findBestMatch(item.descripcion, nombresVariantes);
                     mejorCoincidencia = matches.bestMatch;
                     
-                    // Verificación estricta de límites del índice
                     if (mejorCoincidencia && mejorCoincidencia.index >= 0 && mejorCoincidencia.index < variantesBD.length) {
                         varianteEncontrada = variantesBD[mejorCoincidencia.index];
                     }
                 }
 
-                // CASO A: Existe correspondencia real, segura y el índice coincide perfectamente
                 if (varianteEncontrada && mejorCoincidencia && mejorCoincidencia.rating >= UMBRAL_SIMILITUD) {
-                    
                     await registrarMovimiento(
                         orgId,
                         varianteEncontrada.id,
@@ -93,13 +108,7 @@ router.post('/recepcion-documento', upload.single('archivo'), async (req: any, r
                         warehouseIdReal, 
                         `IA: Factura ${archivoGuardado.id} (Match ${(mejorCoincidencia.rating * 100).toFixed(0)}%)`
                     );
-                    
-                    console.log(`✅ MATCH CONCILIADO: "${item.descripcion}" -> "${varianteEncontrada.nombreVariante}" (${(mejorCoincidencia.rating * 100).toFixed(0)}%)`);
-                } 
-                // CASO B: La BD está en ceros o el producto es completamente nuevo
-                else {
-                    console.log(`✨ Auto-creando producto nuevo: "${item.descripcion}"`);
-
+                } else {
                     const nuevoProducto = await prisma.productos.create({
                         data: {
                             nombre: item.descripcion,
@@ -119,7 +128,6 @@ router.post('/recepcion-documento', upload.single('archivo'), async (req: any, r
                         }
                     });
 
-                    // 🛠️ INTELIGENCIA DE LOTES: Creamos el lote de compra inicial para la trazabilidad FIFO
                     await prisma.loteCompra.create({
                         data: {
                             numeroLote: `LOTE-IA-${Date.now()}`,
@@ -127,7 +135,7 @@ router.post('/recepcion-documento', upload.single('archivo'), async (req: any, r
                             cantidadInicial: item.cantidad,
                             cantidadActual: item.cantidad,
                             varianteId: nuevaVariante.id,
-                            proveedorId: 1 // ID genérico temporal
+                            proveedorId: 1
                         }
                     });
 
@@ -141,7 +149,6 @@ router.post('/recepcion-documento', upload.single('archivo'), async (req: any, r
                         `IA: Auto-creado desde Factura ${archivoGuardado.id}`
                     );
 
-                    // Alimentamos la memoria dinámica
                     variantesBD.push({ 
                         id: nuevaVariante.id, 
                         nombreVariante: nuevaVariante.nombreVariante, 
@@ -156,9 +163,8 @@ router.post('/recepcion-documento', upload.single('archivo'), async (req: any, r
             } catch (itemError: any) {
                 console.error(`🚨 Error crítico en ítem "${item.descripcion}":`, itemError.message);
             }
-        } // Fin del bucle for
+        }
 
-        // Actualizamos el estado del archivo procesado con éxito
         await prisma.archivoPendiente.update({
             where: { id: archivoGuardado.id },
             data: { estado: 'PROCESADO' }
@@ -171,16 +177,62 @@ router.post('/recepcion-documento', upload.single('archivo'), async (req: any, r
     }
 });
 
-router.get('/buscar', Controller.buscarProductosPOS);
+router.get('/buscar', async (req: any, res: Response) => {
+    try {
+        const orgId = Number(req.organizationId);
+        const query = (req.query.q || req.query.query || '').toString().trim();
+
+        const variantes = await prisma.variante.findMany({
+            where: {
+                producto: { organizationId: orgId },
+                OR: [
+                    { nombreVariante: { contains: query, mode: 'insensitive' } },
+                    { sku: { contains: query, mode: 'insensitive' } },
+                    { producto: { nombre: { contains: query, mode: 'insensitive' } } }
+                ]
+            },
+            include: {
+                producto: true,
+                warehouseStocks: true
+            },
+            take: 10
+        });
+
+        const resultadosFormateados = variantes.map((v: any) => {
+            const stockTotal = v.warehouseStocks.length > 0 
+                ? v.warehouseStocks.reduce((acc: number, curr: any) => acc + curr.cantidad, 0) 
+                : v.stockActual;
+
+            return {
+                id: v.id,
+                varianteId: v.id,
+                nombre: v.producto?.nombre || v.nombreVariante,
+                nombreVariante: v.nombreVariante,
+                sku: v.sku,
+                precio: v.precio,
+                stock: stockTotal,
+                cantidad: stockTotal
+            };
+        });
+
+        return res.status(200).json(resultadosFormateados);
+    } catch (error: any) {
+        return res.status(500).json({ error: 'Error al buscar productos en el POS', detalle: error.message });
+    }
+});
 
 // 2. Importación y Movimientos
 router.post('/importar', requireRole(['ADMIN']), upload.single('archivo'), async (req: any, res: Response) => {
     try {
         if (!req.file) return res.status(400).json({ error: "No se subió archivo" });
-        const resultado = await importarInventarioExcel(req.file.buffer, Number(req.user.userId));
-        res.status(200).json(resultado);
+        
+        const orgId = Number(req.organizationId);
+        const userId = Number(req.user.userId);
+
+        const resultado = await importarInventarioExcel(req.file.buffer, userId, orgId);
+        return res.status(200).json(resultado);
     } catch (error: any) {
-        res.status(500).json({ error: 'Error en importación', detalle: error.message });
+        return res.status(500).json({ error: 'Error en importación', detalle: error.message });
     }
 });
 
@@ -196,7 +248,6 @@ router.post('/movimiento', async (req: any, res: Response) => {
     }
 });
 
-// 🛠️ ENDPOINT DE LOTES PARA FIFO MANUAL (Añadir esta ruta)
 router.post('/lotes', async (req: any, res: Response) => {
     try {
         const { varianteId, proveedorId, cantidadInicial, costoUnitario } = req.body;
@@ -206,7 +257,6 @@ router.post('/lotes', async (req: any, res: Response) => {
             return res.status(400).json({ error: "Faltan campos obligatorios" });
         }
 
-        // Crear el lote de compra de forma explícita
         const nuevoLote = await prisma.loteCompra.create({
             data: {
                 numeroLote: `LOTE-MANUAL-${Date.now()}`,
@@ -218,7 +268,6 @@ router.post('/lotes', async (req: any, res: Response) => {
             }
         });
 
-        // Opcional: Incrementamos el stock físico en la bodega principal para que cuadre con el lote
         let bodega = await prisma.warehouse.findFirst({ where: { organizationId: orgId } });
         if (bodega) {
             await prisma.warehouseStock.upsert({
@@ -269,6 +318,5 @@ router.get('/historial', async (req: any, res: any) => {
         res.status(500).json({ error: 'Error al consultar historial' }); 
     }
 });
-
 
 export default router;

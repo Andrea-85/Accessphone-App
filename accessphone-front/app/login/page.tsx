@@ -16,6 +16,9 @@ export default function LoginPage() {
   const [cargando, setCargando] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
 
+  const supportNumber = process.env.NEXT_PUBLIC_WHATSAPP_SUPPORT_NUMBER || '';
+  const whatsappUrl = `https://wa.me/${supportNumber}?text=${encodeURIComponent("Hola, necesito soporte con AccessPhone.")}`;
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -125,7 +128,7 @@ export default function LoginPage() {
           {/* Soporte */}
           <div className="text-center pt-3 border-t border-slate-100">
             <a
-              href={`https://wa.me/573000000000?text=Hola,%20necesito%20restablecer%20mi%20contraseña%20de%20Accessphone-App.%20Mi%20correo%20es:%20${email}`}
+              href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_SUPPORT_NUMBER}?text=${encodeURIComponent(`Hola, necesito restablecer mi contraseña de Accessphone-App. Mi correo es: ${email}`)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs font-semibold text-slate-500 hover:text-slate-800 transition"
